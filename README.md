@@ -27,7 +27,7 @@ O repositório inclui Dockerfile, Caddyfile e railway.json. Criar um serviço de
 
 ## Organização
 
-`public/app.js`: comportamento e dados simulados; `public/styles.css`: tokens e componentes BKM; `public/assets`: SVGs oficiais; `docs`: identidade visual e plano de integração.
+`public/app.js`: comportamento e dados simulados; `public/styles.css`: tokens e componentes BKM; `public/assets`: SVGs oficiais; `docs`: identidade visual.
 
 O futuro adaptador de dados deverá substituir a persistência local e reutilizar o motor `fluxo` do Terrenos após a confirmação de sua implantação. Nenhuma migration faz parte desta entrega.
 
