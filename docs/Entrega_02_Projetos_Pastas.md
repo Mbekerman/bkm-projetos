@@ -31,4 +31,21 @@ Diretórios têm pastas hierárquicas por projeto, criação de pastas/subpastas
 
 ## Limites
 
-Dados ficam neste navegador. Não há autenticação própria, banco remoto ou upload real. A seleção de pasta mostra documentos diretamente nela; Todos os documentos mostra o conjunto do projeto. As tarefas permanecem demonstrativas e não integram ainda o motor do Terrenos. Nenhum ambiente Supabase foi alterado. A validação visual de larguras móveis e a integração automática Git–Vercel devem ter seu resultado registrado na homologação.
+Dados ficam neste navegador. Não há autenticação própria, banco remoto ou upload real. A seleção de pasta mostra documentos diretamente nela; Todos os documentos mostra o conjunto do projeto. As tarefas permanecem demonstrativas e não integram ainda o motor do Terrenos. Nenhum ambiente Supabase foi alterado. A revisão visual em aparelho móvel ainda está pendente; não foi feita emulação de viewport nesta sessão.
+
+## Resultado da homologação
+
+Validado no preview Vercel do commit d3ef7c3, por interação no navegador autenticado:
+
+- Criação de projeto fictício com código, nome, município e descrição.
+- Edição de responsável, situação e datas, com exibição correta nos detalhes.
+- Criação de pasta raiz e subpasta.
+- Inclusão de registro simulado de documento na subpasta.
+- Renomeação e movimentação da subpasta para a raiz, preservando o documento.
+- Recarga da página mantendo projeto, pasta selecionada e documento.
+- Bloqueio de nome duplicado com mensagem no formulário.
+- Arquivamento com preservação de registros e bloqueio das ações de edição nos diretórios.
+- Restauração do projeto com totais preservados.
+- Lista de tarefas e troca para tema escuro.
+
+A integração Git–Vercel gerou automaticamente o deployment dpl_EWVzi1r7fzc1e8KDXp5KqdiK6uTQ para a branch feat/projetos-pastas. Um segundo preview do mesmo commit foi disparado manualmente e usado na homologação. Nenhuma proteção de acesso foi desativada: o acesso foi feito por login normal.
