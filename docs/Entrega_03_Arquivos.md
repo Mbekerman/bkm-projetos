@@ -36,3 +36,9 @@ Migração adicional: confirm_document_upload; fonte em db/upload_confirmation.s
 - Requisição HTTP anônima à tabela projects retornou 401/42501, conforme esperado.
 
 Pendências de homologação real: cadastro/confirmacão do primeiro usuário, login/logout, gravação de projeto via API autenticada e upload/visualização no navegador com arquivo real. Não declarar esses fluxos como testados apenas pelos mocks ou pelo teste SQL. O endereço de retorno do Auth deve ser verificado antes do primeiro cadastro. Visualização de IFC/DWG, anotações e recuperação de senha ainda não fazem parte desta entrega.
+
+## Configuração de retorno e liberação para piloto
+
+O painel confirmou a gravação de Site URL como https://bkm-projetos.vercel.app/online.html. O salvamento da URL adicional na allowlist não pôde ser confirmado porque o navegador ficou sem resposta. A aplicação pede o mesmo endereço configurado como Site URL, que é o destino padrão de retorno. Não foram cadastrados curingas de redirecionamento.
+
+O preview carregou as telas Entrar e Criar acesso. A versão conectada está identificada como teste e será disponibilizada para cadastrar o primeiro usuário e realizar a homologação de arquivos. A demonstração local permanece disponível. A liberação técnica não representa a conclusão dos testes reais de login/upload, ainda pendentes.
