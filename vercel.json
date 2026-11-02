@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
+  "outputDirectory": "public",
+  "headers": [
+    {"source":"/online.html","headers":[{"key":"Cache-Control","value":"no-cache"},{"key":"Referrer-Policy","value":"no-referrer"}]},
+    {"source":"/dist/(.*)","headers":[{"key":"Cache-Control","value":"public, max-age=0, must-revalidate"}]}
+  ]
+}

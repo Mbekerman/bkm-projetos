@@ -36,6 +36,11 @@ begin
  insert into public.document_revisions(id,project_id,document_id,revision_code,object_path,original_filename,mime_type,file_size)
  values(rev,current_setting('bkm.test_project')::uuid,doc,'R00',current_setting('bkm.test_project')||'/'||rev::text||'/teste.pdf','teste.pdf','application/pdf',1024);
  begin
+  update public.document_revisions set upload_state='ready' where id=rev;
+  raise exception 'TEST FAILED: missing upload marked ready';
+ exception when insufficient_privilege then null;
+ end;
+ begin
   update public.document_revisions set revision_code='R01' where id=rev;
   raise exception 'TEST FAILED: immutable revision updated';
  exception when insufficient_privilege then null;
