@@ -1,0 +1,12 @@
+:{$PORT:8080} {
+  encode zstd gzip
+  handle /health {
+    respond "ok" 200
+  }
+  handle {
+    root * /srv
+    header X-Content-Type-Options nosniff
+    header Cache-Control no-cache
+    file_server
+  }
+}
