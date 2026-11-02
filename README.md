@@ -6,8 +6,8 @@ Frente de desenvolvimento independente para gestão de projetos, documentos e ta
 
 Protótipo funcional com dados fictícios. Não possui autenticação real, backend, conexão ao Supabase ou integração com o Terrenos. Alterações ficam no navegador e podem ser restauradas. Não utilizar como repositório de documentos reais nesta fase.
 
-- Projetos: busca, filtro por situação e cadastro local.
-- Diretórios: pastas por disciplina, documentos simulados e histórico de revisão.
+- Projetos: busca, filtro por situação, detalhes, edição, código único, responsável, datas, arquivamento e restauração.
+- Diretórios: árvore de pastas/subpastas, renomeação, movimentação e documentos simulados com vínculo estável à pasta.
 - Tarefas: lista/quadro, criação, responsáveis, comentários e mudanças de situação.
 - Temas claro, escuro e automático; layout responsivo.
 
@@ -19,7 +19,7 @@ Requer Node.js 22 ou posterior. Sem instalação de dependências:
 npm start
 ```
 
-Abra http://localhost:8080. `npm run check` verifica a sintaxe dos scripts. Os arquivos estáticos ficam em `public/`.
+Abra http://localhost:8080. `npm run check` verifica a sintaxe dos scripts. `npm test` executa os testes de regras de negócio e persistência. Os arquivos estáticos ficam em `public/`.
 
 ## Railway
 
