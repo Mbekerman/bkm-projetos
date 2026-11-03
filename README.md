@@ -2,7 +2,7 @@
 
 Frente de desenvolvimento independente para gestão de projetos, documentos e tarefas da BKM, inspirada nos fluxos estudados do Autodoc. Interface Material Design 3 com ativos oficiais BKM.
 
-## Estado atual (0.10)
+## Estado atual (0.11)
 
 A demonstração local de index.html usa dados fictícios salvos no navegador. O ambiente conectado de online.html usa o Supabase dedicado, com autenticação própria e armazenamento privado; sua homologação está descrita abaixo. A integração com o Terrenos ainda não foi implementada.
 
@@ -22,8 +22,9 @@ A demonstração local de index.html usa dados fictícios salvos no navegador. O
 - Equipe por projeto: autorizações BKM, editor/leitor, primeiro acesso Google, troca de papel e revogação.
 - Visão geral: totais calculados no banco, atrasos, minhas tarefas e pendências; histórico de alterações com autor, filtros e paginação.
 - Caixa pessoal de notificações no aplicativo: atribuições, comentários e análises, com filtros e leitura individual/em lote.
+- Busca integrada por documentos, arquivos/revisões, tarefas e textos de marcações, com filtros e paginação.
 
-Veja `docs/Entrega_03_Arquivos.md` até `docs/Entrega_10_Notificacoes.md` para regras e verificações. IFC/DWG, push/e-mail e integração com Terrenos ainda não foram implementados. O aplicativo permanece em homologação/piloto.
+Veja `docs/Entrega_03_Arquivos.md` até `docs/Entrega_11_Busca.md` para regras e verificações. IFC/DWG, push/e-mail e integração com Terrenos ainda não foram implementados. O aplicativo permanece em homologação/piloto.
 
 ## Rodar
 

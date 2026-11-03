@@ -25,7 +25,18 @@ export async function validateFile(file) {
 }
 export function createCloudStore(client) {
   const rows = async query => checked(await query) || [];
+  const allRows=async query=>{const result=[];for(let offset=0;;offset+=500){const page=await rows(query().range(offset,offset+499));result.push(...page);if(page.length<500)return result;}};
   return {
+    async search(filter,after=null){return checked(await client.rpc('search_project_content',{p_query:filter.query,p_project_id:filter.project||null,p_kind:filter.kind,p_include_archived:filter.archived,p_after:after}));},
+    async searchRevision(projectId,id){return checked(await client.from('document_revisions').select('*').eq('project_id',projectId).eq('id',id).maybeSingle());},
+    async searchAnnotation(projectId,id){return checked(await client.from('document_annotations').select('*').eq('project_id',projectId).eq('id',id).is('deleted_at',null).maybeSingle());},
+    async searchDocument(projectId,id){
+      const document=checked(await client.from('documents').select('*').eq('project_id',projectId).eq('id',id).maybeSingle());
+      if(!document)throw Error('Documento indisponível. Confira seu acesso e atualize a busca.');
+      const revisions=await allRows(()=>client.from('document_revisions').select('*').eq('project_id',projectId).eq('document_id',id).order('created_at',{ascending:false}).order('id',{ascending:false})),reviews=[];
+      for(let offset=0;offset<revisions.length;offset+=100){const ids=revisions.slice(offset,offset+100).map(r=>r.id);reviews.push(...await allRows(()=>client.from('revision_reviews').select('*').eq('project_id',projectId).in('revision_id',ids).order('id')));}
+      return {document,revisions,reviews};
+    },
     async projects() { return rows(client.from('projects').select('*').order('created_at', {ascending:false})); },
     async notifications(projectId=null,unread=true,before=null){return checked(await client.rpc('list_notifications',{p_project_id:projectId,p_unread:unread,p_before:before}));},
     async markNotification(id,read=true){return checked(await client.rpc('mark_notification',{p_notification_id:id,p_read:read}));},

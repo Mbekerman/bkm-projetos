@@ -1,6 +1,6 @@
 {
   "name": "bkm-projetos",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -20,4 +20,3 @@
     "esbuild": "0.28.2"
   }
 }
-
