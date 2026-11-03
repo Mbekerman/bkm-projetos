@@ -17,9 +17,14 @@ const editable=()=>!!project()&&!project().archived&&(own()||state.members.some(
 const shape=()=>({projects:state.projects.map(p=>({...p,owner:p.responsible_name,startDate:p.start_date||'',endDate:p.end_date||''})),folders:state.folders.map(f=>({...f,project:f.project_id,parent:f.parent_id}))});
 function toast(text){const el=document.getElementById('toast');el.textContent=text;el.style.display='block';setTimeout(()=>{el.style.display='none'},6000);}
 function dialog(title,body){modal.close();document.getElementById('cloud-modal-body').innerHTML=`<div class="dialog-heading"><h2>${esc(title)}</h2><button data-close-modal aria-label="Fechar">×</button></div>${body}`;modal.showModal();}
-function clearViewer(){viewerGeneration++;review?.dispose();review=null;disposePdf?.();disposePdf=null;if(activeBlob){URL.revokeObjectURL(activeBlob);activeBlob=null}document.getElementById('viewer-content').replaceChildren();document.getElementById('annotation-panel').replaceChildren();}
-function closeViewer(){clearViewer();viewer.close();}
-viewer.addEventListener('close',()=>{if(!viewer.open)clearViewer();});
+function clearViewer(){
+ viewerGeneration++;const oldReview=review,oldPdf=disposePdf;review=null;disposePdf=null;
+ oldReview?.dispose();if(activeBlob){URL.revokeObjectURL(activeBlob);activeBlob=null}
+ document.getElementById('viewer-content').replaceChildren();document.getElementById('annotation-panel').replaceChildren();
+ return oldPdf?.();
+}
+function closeViewer(){const cleanup=clearViewer();viewer.close();return cleanup;}
+viewer.addEventListener('close',()=>{if(!viewer.open&&(review||disposePdf||activeBlob||document.getElementById('viewer-content').childNodes.length))void clearViewer();});
 function setTheme(value){if(!['light','dark','auto'].includes(value))value='auto';const dark=value==='dark'||value==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=dark?'dark':'light';document.getElementById('theme').value=value;try{localStorage.setItem('bkm-projetos-theme',value)}catch{}}
 let initialTheme='auto';try{initialTheme=localStorage.getItem('bkm-projetos-theme')||'auto'}catch{}setTheme(initialTheme);
 document.getElementById('theme').addEventListener('change',e=>setTheme(e.target.value));
@@ -75,7 +80,8 @@ function documentDialog(id){const d=state.documents.find(d=>d.id===id);if(!d)ret
 }
 async function viewRevision(id,download=false){
  const r=state.revisions.find(r=>r.id===id);if(!r)throw Error('Revisão não encontrada.');
- if(!download)closeViewer();const generation=viewerGeneration;
+ const cleanup=download?null:closeViewer(),generation=viewerGeneration;await cleanup;
+ if(!download&&generation!==viewerGeneration)return;
  const blob=await store.download(r);if(!download&&generation!==viewerGeneration)return;
  if(download){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=r.original_filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);return;}
  modal.close();document.getElementById('viewer-title').textContent=`${r.original_filename} · ${r.revision_code}`;viewer.showModal();
