@@ -1,6 +1,6 @@
 # Login Google BKM
 
-Implementação preparada em 03/11/2026. O provedor Google ainda precisa ser ativado. Não considerar login Google homologado até concluir um login real.
+Provedor Google ativado no BKM_autodoc. Site URL e retorno autorizado conferidos. O botão publicado abriu a tela oficial do Google identificada como BKM Projetos; o usuário confirmou que o login funciona em 02/11/2026.
 
 ## Fluxo
 
@@ -12,7 +12,7 @@ Nome/foto são dados de exibição e nunca concedem permissões. user_profiles t
 
 A entrada no app não concede acesso aos projetos de outros usuários. Continuam valendo proprietário e participantes de cada projeto.
 
-## Configuração pendente
+## Referência de configuração concluída
 
 1. No Google Cloud/Google Auth Platform da BKM, selecionar ou criar um projeto dedicado. Se associado ao Workspace BKM e disponível, usar público interno.
 2. Configurar nome BKM Projetos e contato de suporte. Escopos: openid, userinfo.email, userinfo.profile. Não solicitar contatos, arquivos ou People API.
@@ -28,6 +28,6 @@ Google em navegador embutido pode exigir abrir o site no Chrome/Safari. Isso pre
 
 ## Evidências
 
-16 testes Node passaram e build compilado. db/verify_google_profiles.sql executado com rollback: perfil automático, Google BKM verificado aceito, Google externo/subdomínio fraudulento/não verificado recusados, celular persistido, isolamento entre perfis e metadados protegidos. db/verify_access.sql passou após migração: proprietário/editor/leitor/externo, pastas, revisões, arquivo e auditoria. Testes não enviam e-mail nem criam dados permanentes. Login OAuth real e inspeção visual pendentes de credenciais e navegador operacional.
+16 testes Node passaram e build compilado. db/verify_google_profiles.sql executado com rollback: perfil automático, Google BKM verificado aceito, Google externo/subdomínio fraudulento/não verificado recusados, celular persistido, isolamento entre perfis e metadados protegidos. db/verify_access.sql passou após migração: proprietário/editor/leitor/externo, pastas, revisões, arquivo e auditoria. Testes não enviam e-mail nem criam dados permanentes. Posteriormente, o provedor foi ativado e o usuário confirmou o login real.
 
 Fontes: https://supabase.com/docs/guides/auth/social-sign-in/auth-google e https://developers.google.com/identity/openid-connect/openid-connect

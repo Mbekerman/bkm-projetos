@@ -42,3 +42,7 @@ Pendências de homologação real: cadastro/confirmacão do primeiro usuário, l
 O painel confirmou a gravação de Site URL como https://bkm-projetos.vercel.app/online.html. O salvamento da URL adicional na allowlist não pôde ser confirmado porque o navegador ficou sem resposta. A aplicação pede o mesmo endereço configurado como Site URL, que é o destino padrão de retorno. Não foram cadastrados curingas de redirecionamento.
 
 O preview carregou as telas Entrar e Criar acesso. A versão conectada está identificada como teste e será disponibilizada para cadastrar o primeiro usuário e realizar a homologação de arquivos. A demonstração local permanece disponível. A liberação técnica não representa a conclusão dos testes reais de login/upload, ainda pendentes.
+
+## Atualizações posteriores
+
+Google BKM ativado e login confirmado pelo usuário; Site URL e redirect allowlist conferidos. Salvar projeto com INSERT RETURNING corrigido e confirmado. Anotações por ponto em PDF/imagens adicionadas na Entrega 0.4; ver Entrega_04_Anotacoes.md. As pendências antigas acima descrevem a situação original da entrega e não o estado atual da autenticação.
