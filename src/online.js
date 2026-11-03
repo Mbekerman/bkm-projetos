@@ -3,11 +3,12 @@ import {SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY} from '../public/cloud-config.js';
 import {createCloudStore,checked} from '../public/cloud-store.js';
 import {esc,projectForm,folderForm} from '../public/project-ui.js';
 import {folderPath} from '../public/model.js';
+import {googleOptions,normalizeMobile,avatarUrl} from '../public/auth-profile.js';
 import {openPdf} from '../public/pdf-viewer.js';
 
 const client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const store=createCloudStore(client), main=document.getElementById('cloud-main'), modal=document.getElementById('cloud-modal'), viewer=document.getElementById('file-viewer');
-const state={user:null,projects:[],members:[],folders:[],documents:[],revisions:[],project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
+const state={profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
 let activeBlob=null,disposePdf=null,authGeneration=0;
 const project=()=>state.projects.find(p=>p.id===state.project);
 const own=()=>project()?.owner_id===state.user?.id;
@@ -24,7 +25,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(doc
 
 function loginPage(){
  const signup=state.authMode==='signup';
- return `<section class="panel auth-panel"><p class="eyebrow">BKM Projetos</p><h1>${signup?'Criar acesso':'Entrar no ambiente conectado'}</h1><p class="muted">Seus projetos e documentos, acessíveis com sua conta.</p><div class="auth-tabs"><button data-auth-mode="login" class="${!signup?'tonal':''}">Entrar</button><button data-auth-mode="signup" class="${signup?'tonal':''}">Criar acesso</button></div>${state.message?`<p class="note">${esc(state.message)}</p>`:''}${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<form class="form-grid" data-form="auth"><label>E-mail<input name="email" type="email" required autocomplete="username" maxlength="254"></label><label>Senha<input name="password" type="password" required minlength="${signup?8:1}" autocomplete="${signup?'new-password':'current-password'}"></label>${signup?'<p class="muted">Use pelo menos 8 caracteres. Não é obrigatório usar caracteres especiais. Pode ser necessário confirmar seu e-mail antes de entrar. Criar uma conta não concede acesso aos projetos de outras pessoas.</p>':''}<button class="primary" ${state.busy?'disabled':''}>${state.busy?'Aguarde…':signup?'Criar meu acesso':'Entrar'}</button></form><p class="auth-info muted">Este acesso é independente da conta da Vercel. Nesta etapa, use e-mail e senha.</p><a href="index.html">Continuar na demonstração local</a></section>`;
+ return `<section class="panel auth-panel"><p class="eyebrow">BKM Projetos</p><h1>${signup?'Criar acesso':'Entrar no ambiente conectado'}</h1><p class="muted">Seus projetos e documentos, acessíveis com sua conta.</p><button class="primary google-login" data-google-login ${state.googleEnabled&&!state.busy?'':'disabled'}>Entrar com Google BKM</button><p class="muted">Contas @bkm.com.br entram sem cadastro e sem senha.${state.googleEnabled?'':' Login Google em configuração.'}</p><div class="auth-tabs"><button data-auth-mode="login" class="${!signup?'tonal':''}">Entrar</button><button data-auth-mode="signup" class="${signup?'tonal':''}">Criar acesso</button></div>${state.message?`<p class="note">${esc(state.message)}</p>`:''}${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<form class="form-grid" data-form="auth"><label>E-mail<input name="email" type="email" required autocomplete="username" maxlength="254"></label><label>Senha<input name="password" type="password" required minlength="${signup?8:1}" autocomplete="${signup?'new-password':'current-password'}"></label>${signup?'<p class="muted">Use pelo menos 8 caracteres. Não é obrigatório usar caracteres especiais. Pode ser necessário confirmar seu e-mail antes de entrar. Criar uma conta não concede acesso aos projetos de outras pessoas.</p>':''}<button class="primary" ${state.busy?'disabled':''}>${state.busy?'Aguarde…':signup?'Criar meu acesso':'Entrar'}</button></form><p class="auth-info muted">Este acesso é independente da conta da Vercel. Para contas BKM, use o Google. O acesso por senha permanece disponível.</p><a href="index.html">Continuar na demonstração local</a></section>`;
 }
 function projectsPage(){
  const filtered=state.projects.filter(p=>`${p.code} ${p.name} ${p.city}`.toLocaleLowerCase().includes(state.query.toLocaleLowerCase()));
@@ -38,12 +39,13 @@ function filesPage(){
  const revisions=state.revisions.filter(r=>r.document_id===d.id),ready=revisions.find(r=>r.upload_state==='ready'),pending=revisions.some(r=>r.upload_state==='pending');
  return `<div class="cloud-row"><div><strong>${esc(d.code)} · ${esc(d.title)}</strong><p>${esc(folderPath(data,d.folder_id).map(f=>f.name).join(' / '))}</p><span class="cloud-file">${ready?`Disponível: ${esc(ready.revision_code)} · ${esc(ready.original_filename)}`:'Nenhum arquivo recebido ainda'}</span>${pending?'<p class="cloud-status">Existe um envio pendente. Abra as revisões para retomar.</p>':''}</div><button data-document="${d.id}">Abrir revisões</button></div>`;}).join('')||'<div class="empty">Nenhum documento nesta seleção.</div>'}</div></section></div>`;
 }
-function settingsPage(){return `<div class="cloud-header"><h1>Minha conta</h1></div><div class="panel cloud-settings"><div class="settings-row"><div><h2>Acesso conectado</h2><p class="auth-email">${esc(state.user.email)}</p><p class="muted">Cada projeto controla seus participantes.</p></div></div><div class="settings-row"><div><h2>Arquivos</h2><p class="muted">PDF, PNG e JPEG, até 20 MiB. Os originais e cada revisão são preservados.</p></div></div><div class="settings-row"><div><h2>Demonstração local</h2><p class="muted">Seus exemplos locais permanecem separados. A importação para a nuvem ainda não está disponível.</p><a href="index.html">Abrir demonstração</a></div></div><div class="settings-row"><p class="muted">Anotações, IFC, DWG e integração de tarefas ainda serão implementados.</p></div></div>`;}
+function profileForm(){const p=state.profile||{},photo=avatarUrl(p.avatar_url);return `<div class="panel cloud-settings">${photo?`<img class="profile-avatar" src="${esc(photo)}" alt="Foto de perfil" referrerpolicy="no-referrer">`:''}<h2>${esc(p.full_name||'Minha conta')}</h2><p>${esc(state.user.email)}</p><form class="form-grid" data-form="profile"><label>Celular<input name="mobile" type="tel" autocomplete="tel" required maxlength="30" placeholder="(11) 99999-9999" value="${esc(p.mobile||'')}"></label><p class="muted">O Google fornece nome, foto e e-mail. Informe seu celular para completar o perfil. Este número não é verificado por SMS.</p><button class="primary" ${state.busy?'disabled':''}>Salvar celular</button></form></div>`;}
+function settingsPage(){return `<div class="cloud-header"><h1>Minha conta</h1></div>${profileForm()}<div class="panel cloud-settings"><div class="settings-row"><div><h2>Acesso conectado</h2><p class="auth-email">${esc(state.user.email)}</p><p class="muted">Cada projeto controla seus participantes.</p></div></div><div class="settings-row"><div><h2>Arquivos</h2><p class="muted">PDF, PNG e JPEG, até 20 MiB. Os originais e cada revisão são preservados.</p></div></div><div class="settings-row"><div><h2>Demonstração local</h2><p class="muted">Seus exemplos locais permanecem separados. A importação para a nuvem ainda não está disponível.</p><a href="index.html">Abrir demonstração</a></div></div><div class="settings-row"><p class="muted">Anotações, IFC, DWG e integração de tarefas ainda serão implementados.</p></div></div>`;}
 function render(){
- const signed=!!state.user;
+ const signed=!!state.user,needsMobile=signed&&state.user.app_metadata?.providers?.includes('google')&&!state.profile?.mobile;
  document.getElementById('cloud-sidebar').hidden=!signed;document.getElementById('signout').hidden=!signed;main.classList.toggle('auth-page',!signed);
  document.querySelectorAll('[data-cloud-view]').forEach(b=>{const active=b.dataset.cloudView===state.view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
- main.innerHTML=signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({projects:projectsPage,files:filesPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
+ main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({projects:projectsPage,files:filesPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
 }
 async function reload(){
  if(!state.user)return;
@@ -83,6 +85,7 @@ document.addEventListener('click',async e=>{
  if(d.closeViewer!==undefined){closeViewer();return;}
  if(state.busy)return;
  if(d.closeModal!==undefined||d.act==='close'){modal.close();return;}
+ if(d.googleLogin!==undefined){await run(async()=>{if(!state.googleEnabled)throw Error('Login Google ainda em configuração.');checked(await client.auth.signInWithOAuth(googleOptions()));},{close:false});return;}
  if(d.authMode){state.authMode=d.authMode;state.error='';state.message='';render();return;}
  if(d.cloudView){state.view=d.cloudView;state.query='';render();return;}
  if(d.openProject){state.project=d.openProject;state.folder=null;state.query='';state.view='files';await run(reload);return;}
@@ -107,6 +110,7 @@ document.addEventListener('submit',async e=>{
  const f=Object.fromEntries(new FormData(form)),kind=form.dataset.form;
  if(kind==='search'){state.query=f.query.trim();render();return;}
  await run(async()=>{
+  if(kind==='profile'){state.profile=checked(await client.from('user_profiles').update({mobile:normalizeMobile(f.mobile)}).eq('id',state.user.id).select().single());toast('Celular salvo.');}
   if(kind==='auth'){
    if(state.authMode==='signup'){const result=checked(await client.auth.signUp({email:f.email.trim(),password:f.password,options:{emailRedirectTo:'https://bkm-projetos.vercel.app/online.html'}}));state.message=result.session?'Acesso criado.':'Confira o e-mail de confirmação. Depois de confirmar, volte aqui e entre com sua senha.';state.authMode='login';if(!result.session)form.reset();}
    else checked(await client.auth.signInWithPassword({email:f.email.trim(),password:f.password}));
@@ -136,8 +140,10 @@ async function refreshAuth(){
  try{const {data,error}=await client.auth.getUser();if(generation!==authGeneration)return;
   if(error&&error.name!=='AuthSessionMissingError')throw error;
   const previous=state.user?.id;state.user=data.user||null;
-  if(!state.user){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.project=null;render();return;}
+  if(!state.user){state.profile=null;closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.project=null;render();return;}
+  state.profile=checked(await client.from('user_profiles').select('id,full_name,avatar_url,mobile').eq('id',state.user.id).single());
   if(previous!==state.user.id){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.project=null;state.folder=null;await reload();}state.error='';render();
  }catch(error){state.error='Não foi possível verificar sua sessão. Confira a conexão e tente entrar novamente.';render();}
 }
-render();void refreshAuth();
+async function loadProviders(){try{const response=await fetch(`${SUPABASE_URL}/auth/v1/settings`,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY},signal:AbortSignal.timeout(10000)});if(response.ok){const settings=await response.json();state.googleEnabled=settings.external?.google===true;render();}}catch{}}
+render();void refreshAuth();void loadProviders();

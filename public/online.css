@@ -4,3 +4,4 @@
 [hidden]{display:none!important}
 
 .form-error.cloud-progress{background:var(--low)}
+.google-login{margin-top:1rem;min-height:48px;width:100%}.profile-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover}.cloud-settings form{max-width:32rem}
