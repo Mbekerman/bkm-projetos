@@ -10,11 +10,12 @@ import {taskValues} from '../public/task-model.js';
 import {tasksPage,taskForm,taskDetails,taskRevisionOptions} from '../public/task-ui.js';
 import {projectAccessPage,addAccessForm,changeAccessForm,revokeAccessForm,corporateEmail,accessRole} from '../public/project-access.js';
 import {overviewPage,activityPage} from '../public/project-overview.js';
+import {notificationsPage,readAllForm,unreadBadge} from '../public/notifications-ui.js';
 import {openPdf} from '../public/pdf-viewer.js';
 
 const client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const store=createCloudStore(client), main=document.getElementById('cloud-main'), modal=document.getElementById('cloud-modal'), viewer=document.getElementById('file-viewer');
-const state={overview:null,activity:null,activityKind:'all',activityCursors:[null],profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[],taskView:'board',taskFilter:{query:'',assignee:'',priority:'',overdue:false,archived:false},reviewFilter:'in_review',project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
+const state={inbox:null,notificationUnread:null,notificationFilter:{project:'',unread:true},notificationCursors:[null],overview:null,activity:null,activityKind:'all',activityCursors:[null],profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[],taskView:'board',taskFilter:{query:'',assignee:'',priority:'',overdue:false,archived:false},reviewFilter:'in_review',project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
 let activeBlob=null,disposePdf=null,review=null,viewerGeneration=0,authGeneration=0;
 const project=()=>state.projects.find(p=>p.id===state.project);
 const own=()=>project()?.owner_id===state.user?.id;
@@ -51,9 +52,13 @@ function filesPage(){
  const revisions=state.revisions.filter(r=>r.document_id===d.id),ready=revisions.find(r=>r.upload_state==='ready'),pending=revisions.some(r=>r.upload_state==='pending');
  return `<div class="cloud-row"><div><strong>${esc(d.code)} · ${esc(d.title)}</strong><p>${esc(folderPath(data,d.folder_id).map(f=>f.name).join(' / '))}</p><span class="cloud-file">${ready?`Disponível: ${esc(ready.revision_code)} · ${esc(ready.original_filename)}`:'Nenhum arquivo recebido ainda'}</span>${ready?`<div>${reviewBadge(latestReview(state.reviews,ready.id))}</div>`:''}${pending?'<p class="cloud-status">Existe um envio pendente. Abra as revisões para retomar.</p>':''}</div><button data-document="${d.id}">Abrir revisões</button></div>`;}).join('')||'<div class="empty">Nenhum documento nesta seleção.</div>'}</div></section></div>`;
 }
+function connectedNotifications(){return notificationsPage({inbox:state.inbox,projects:state.projects,filter:state.notificationFilter,hasPrevious:state.notificationCursors.length>1});}
+function resetInbox(){state.inbox=null;state.notificationCursors=[null];}
+async function loadInbox(){const user=state.user?.id,filter={...state.notificationFilter},cursor=state.notificationCursors.at(-1);if(!user)return;const inbox=await store.notifications(filter.project||null,filter.unread,cursor);if(state.user?.id===user&&state.view==='notifications'&&state.notificationFilter.project===filter.project&&state.notificationFilter.unread===filter.unread)state.inbox=inbox;}
+async function refreshInboxCount(){const user=state.user?.id;if(!user)return;try{const inbox=await store.notifications();if(state.user?.id===user)state.notificationUnread=inbox.unread_count;}catch{state.notificationUnread=null;}}
 function connectedOverview(){return overviewPage({project:project(),projects:state.projects,overview:state.overview,people:state.people});}
 function connectedActivity(){return activityPage({project:project(),projects:state.projects,activity:state.activity,kind:state.activityKind,hasPrevious:state.activityCursors.length>1,people:state.people});}
-async function loadOperations(){const id=state.project,user=state.user?.id,view=state.view;if(!id)return;const value=view==='overview'?await store.overview(id):view==='activity'?await store.activity(id,state.activityKind,state.activityCursors.at(-1)):null;if(state.project===id&&state.user?.id===user&&state.view===view&&value)state[view]=value;}
+async function loadOperations(){const id=state.project,user=state.user?.id,view=state.view;if(view==='notifications'){await loadInbox();return;}if(!id)return;const value=view==='overview'?await store.overview(id):view==='activity'?await store.activity(id,state.activityKind,state.activityCursors.at(-1)):null;if(state.project===id&&state.user?.id===user&&state.view===view&&value)state[view]=value;}
 function resetOperations(){state.overview=null;state.activity=null;state.activityCursors=[null];}
 function participantsPage(){return projectAccessPage({project:project(),projects:state.projects,people:state.people,invites:state.invites,isOwner:own()});}
 function connectedTasks(){return tasksPage({project:project(),projects:state.projects,tasks:state.tasks,people:state.people,canWrite:editable(),view:state.taskView,filter:state.taskFilter});}
@@ -67,11 +72,12 @@ function approvalsPage(){
 function profileForm(){const p=state.profile||{},photo=avatarUrl(p.avatar_url);return `<div class="panel cloud-settings">${photo?`<img class="profile-avatar" src="${esc(photo)}" alt="Foto de perfil" referrerpolicy="no-referrer">`:''}<h2>${esc(p.full_name||'Minha conta')}</h2><p>${esc(state.user.email)}</p><form class="form-grid" data-form="profile"><label>Celular<input name="mobile" type="tel" autocomplete="tel" required maxlength="30" placeholder="(11) 99999-9999" value="${esc(p.mobile||'')}"></label><p class="muted">O Google fornece nome, foto e e-mail. Informe seu celular para completar o perfil. Este número não é verificado por SMS.</p><button class="primary" ${state.busy?'disabled':''}>Salvar celular</button></form></div>`;}
 function settingsPage(){return `<div class="cloud-header"><h1>Minha conta</h1></div>${profileForm()}<div class="panel cloud-settings"><div class="settings-row"><div><h2>Acesso conectado</h2><p class="auth-email">${esc(state.user.email)}</p><p class="muted">Cada projeto controla seus participantes.</p></div></div><div class="settings-row"><div><h2>Arquivos</h2><p class="muted">PDF, PNG e JPEG, até 20 MiB. Os originais e cada revisão são preservados.</p></div></div><div class="settings-row"><div><h2>Demonstração local</h2><p class="muted">Seus exemplos locais permanecem separados. A importação para a nuvem ainda não está disponível.</p><a href="index.html">Abrir demonstração</a></div></div><div class="settings-row"><p class="muted">Anotações, desenhos e pareceres estão disponíveis por revisão em PDF e imagens. Tarefas vinculadas aos projetos e documentos estão disponíveis. IFC e DWG serão implementados nas próximas etapas.</p></div></div>`;}
 function render(){
+ const badge=document.getElementById('notification-badge');if(badge)badge.textContent=unreadBadge(state.notificationUnread);
  const signed=!!state.user,needsMobile=signed&&state.user.app_metadata?.providers?.includes('google')&&!state.profile?.mobile;
  document.getElementById('cloud-sidebar').hidden=!signed;document.getElementById('signout').hidden=!signed;main.classList.toggle('auth-page',!signed);
  document.querySelectorAll('[data-cloud-view]').forEach(b=>{const active=b.dataset.cloudView===state.view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
- main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({overview:connectedOverview,activity:connectedActivity,projects:projectsPage,files:filesPage,tasks:connectedTasks,approvals:approvalsPage,participants:participantsPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
- if(signed&&['overview','activity'].includes(state.view))main.scrollIntoView({block:'start'});
+ main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({notifications:connectedNotifications,overview:connectedOverview,activity:connectedActivity,projects:projectsPage,files:filesPage,tasks:connectedTasks,approvals:approvalsPage,participants:participantsPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
+ if(signed&&['overview','activity','notifications'].includes(state.view))main.scrollIntoView({block:'start'});
 }
 async function reload(){
  if(!state.user)return;
@@ -80,7 +86,7 @@ async function reload(){
  if(!state.projects.some(p=>p.id===state.project))state.project=state.projects[0]?.id||null;
  if(state.project)Object.assign(state,await store.projectData(state.project));else Object.assign(state,{folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[]});
  if(!state.folders.some(f=>f.id===state.folder))state.folder=null;
- resetOperations();await loadOperations();
+ resetOperations();resetInbox();if(!state.projects.some(p=>p.id===state.notificationFilter.project))state.notificationFilter.project='';await refreshInboxCount();await loadOperations();
 }
 async function run(work,{close=true}={}){
  if(state.busy)return;state.busy=true;state.error='';
@@ -122,7 +128,11 @@ document.addEventListener('click',async e=>{
  if(d.closeModal!==undefined||d.act==='close'){modal.close();return;}
  if(d.googleLogin!==undefined){await run(async()=>{if(!state.googleEnabled)throw Error('Login Google ainda em configuração.');checked(await client.auth.signInWithOAuth(googleOptions()));},{close:false});return;}
  if(d.authMode){state.authMode=d.authMode;state.error='';state.message='';render();return;}
- if(d.cloudView){state.view=d.cloudView;state.query='';if(['overview','activity'].includes(state.view)){resetOperations();await run(loadOperations);}else render();return;}
+ if(d.cloudView){state.view=d.cloudView;state.query='';if(['overview','activity','notifications'].includes(state.view)){resetOperations();resetInbox();await run(async()=>{if(state.view==='notifications')await refreshInboxCount();await loadOperations();});}else render();return;}
+ if(d.notificationsNext!==undefined||d.notificationsPrev!==undefined){const old=[...state.notificationCursors];if(d.notificationsNext!==undefined){if(!state.inbox?.has_more)return;state.notificationCursors.push(state.inbox.next_cursor);}else if(state.notificationCursors.length>1)state.notificationCursors.pop();else return;await run(async()=>{try{await loadInbox();}catch(error){state.notificationCursors=old;throw error;}});return;}
+ if(d.notificationRead){await run(async()=>{await store.markNotification(d.notificationRead,d.readValue==='true');resetInbox();await refreshInboxCount();await loadInbox();});return;}
+ if(d.notificationsReadAll!==undefined){if(state.inbox?.through_id&&state.inbox.unread_count>0)dialog('Marcar avisos como lidos',readAllForm(state.inbox,state.projects.find(p=>p.id===state.notificationFilter.project)?.name));return;}
+ if(d.notificationOpen){const notice=state.inbox?.items.find(n=>n.id===d.notificationOpen);if(!notice)return;await run(async()=>{state.project=notice.project_id;state.view=notice.kind.startsWith('task_')?'tasks':'approvals';state.reviewFilter='all';await reload();if(notice.kind.startsWith('task_'))await taskDialog(notice.target_id);},{close:false});return;}
  if(d.projectOverview){state.project=d.projectOverview;state.folder=null;state.view='overview';resetOperations();await run(reload);return;}
  if(d.activityNext!==undefined||d.activityPrev!==undefined){const old=[...state.activityCursors];if(d.activityNext!==undefined){if(!state.activity?.has_more)return;state.activityCursors.push(state.activity.next_cursor);}else if(state.activityCursors.length>1)state.activityCursors.pop();else return;await run(async()=>{try{await loadOperations();}catch(error){state.activityCursors=old;throw error;}});return;}
  if(d.openProject){state.project=d.openProject;state.folder=null;state.query='';state.view='files';await run(reload);return;}
@@ -152,12 +162,12 @@ document.addEventListener('click',async e=>{
  if(d.refresh!==undefined){await run(reload);return;}
  if(d.toggleArchive!==undefined){const p=project();dialog(p.archived?'Restaurar projeto':'Arquivar projeto',`<p>${p.archived?'Restaurar':'Arquivar'} ${esc(p.name)}? Os documentos serão preservados.</p><div class="dialog-actions"><button data-close-modal>Cancelar</button><button data-confirm-archive class="primary">Confirmar</button></div>`);return;}
  if(d.confirmArchive!==undefined)await run(async()=>{await store.saveProject({archived:!project().archived},state.project);await reload();toast('Projeto atualizado.');});
- if(button.id==='signout')await run(async()=>{checked(await client.auth.signOut());closeViewer();state.user=null;state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();});
+ if(button.id==='signout')await run(async()=>{checked(await client.auth.signOut());closeViewer();state.user=null;state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();resetInbox();state.notificationUnread=null;state.notificationFilter={project:'',unread:true};});
 });
-document.addEventListener('change',async e=>{if(e.target.matches('[data-task-stage-select]')){const label=e.target.form.querySelector('[data-task-pause-label]');label.hidden=e.target.value!=='paused';label.querySelector('textarea').required=e.target.value==='paused';}
+document.addEventListener('change',async e=>{if(e.target.id==='notification-project'||e.target.id==='notification-state'){if(state.busy)return;if(e.target.id==='notification-project')state.notificationFilter.project=e.target.value;else state.notificationFilter.unread=e.target.value==='unread';resetInbox();await run(loadInbox);return;}if(e.target.matches('[data-task-stage-select]')){const label=e.target.form.querySelector('[data-task-pause-label]');label.hidden=e.target.value!=='paused';label.querySelector('textarea').required=e.target.value==='paused';}
  if(e.target.matches('[data-task-document]')){const form=e.target.form,select=form.querySelector('[data-task-revision]');select.innerHTML=taskRevisionOptions(state.revisions,e.target.value,null);select.disabled=!e.target.value;form.elements.annotation_id.value='';form.querySelector('[data-task-annotation-label]').hidden=true;}
  if(e.target.matches('[data-task-revision]')){e.target.form.elements.annotation_id.value='';e.target.form.querySelector('[data-task-annotation-label]').hidden=true;}
- if(e.target.matches('[data-review-outcome]')){e.target.form.querySelector('textarea[name="message"]').required=e.target.value!=='approved';}if(e.target.id==='review-filter'){state.reviewFilter=e.target.value;render();return;}if(e.target.id==='activity-kind'){state.activityKind=e.target.value;resetOperations();await run(loadOperations);return;}if(e.target.id==='cloud-project'){state.project=e.target.value;state.folder=null;state.query='';resetOperations();await run(reload);}});
+ if(e.target.matches('[data-review-outcome]')){e.target.form.querySelector('textarea[name="message"]').required=e.target.value!=='approved';}if(e.target.id==='review-filter'){state.reviewFilter=e.target.value;render();return;}if(e.target.id==='activity-kind'){state.activityKind=e.target.value;resetOperations();resetInbox();await run(async()=>{if(state.view==='notifications')await refreshInboxCount();await loadOperations();});return;}if(e.target.id==='cloud-project'){state.project=e.target.value;state.folder=null;state.query='';resetOperations();await run(reload);}});
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('form');if(!form)return;e.preventDefault();if(state.busy)return;
  const f=Object.fromEntries(new FormData(form)),kind=form.dataset.form;
@@ -165,6 +175,7 @@ document.addEventListener('submit',async e=>{
  if(kind==='task-comment'){await run(async()=>{const body=String(f.body||'').trim();if(!body||body.length>2000)throw Error('Escreva um comentário de até 2.000 caracteres.');await store.addTaskComment({project_id:state.project,task_id:form.dataset.id,body});await taskDialog(form.dataset.id);},{close:false});return;}
  if(kind==='search'){state.query=f.query.trim();render();return;}
  await run(async()=>{
+  if(kind==='notifications-read'){const through=state.inbox?.through_id;if(!through)throw Error('Atualize os avisos antes de confirmar.');await store.markNotificationsRead(through,state.notificationFilter.project||null);resetInbox();await refreshInboxCount();await loadInbox();toast('Avisos marcados como lidos.');}
   if(kind==='add-access'){await store.addAccess(state.project,corporateEmail(f.email),accessRole(f.role));await reload();toast('Autorização de acesso registrada.');}
   if(kind==='change-access'){await store.changeAccess(state.project,form.dataset.id,form.dataset.kind,accessRole(f.role));await reload();toast('Papel atualizado.');}
   if(kind==='revoke-access'){await store.revokeAccess(state.project,form.dataset.id,form.dataset.kind);await reload();toast('Acesso revogado.');}
@@ -202,9 +213,9 @@ async function refreshAuth(){
  try{const {data,error}=await client.auth.getUser();if(generation!==authGeneration)return;
   if(error&&error.name!=='AuthSessionMissingError')throw error;
   const previous=state.user?.id;state.user=data.user||null;
-  if(!state.user){state.profile=null;closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();render();return;}
+  if(!state.user){state.profile=null;closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();resetInbox();state.notificationUnread=null;state.notificationFilter={project:'',unread:true};render();return;}
   state.profile=checked(await client.from('user_profiles').select('id,full_name,avatar_url,mobile').eq('id',state.user.id).single());
-  if(previous!==state.user.id){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();state.folder=null;await reload();}state.error='';render();
+  if(previous!==state.user.id){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();resetInbox();state.notificationUnread=null;state.notificationFilter={project:'',unread:true};state.folder=null;await reload();}state.error='';render();
  }catch(error){state.error='Não foi possível verificar sua sessão. Confira a conexão e tente entrar novamente.';render();}
 }
 async function loadProviders(){try{const response=await fetch(`${SUPABASE_URL}/auth/v1/settings`,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY},signal:AbortSignal.timeout(10000)});if(response.ok){const settings=await response.json();state.googleEnabled=settings.external?.google===true;const button=main.querySelector('[data-google-login]');if(button)button.disabled=!state.googleEnabled||state.busy;const info=main.querySelector('[data-google-info]');if(info)info.textContent=`Contas @bkm.com.br entram sem cadastro e sem senha.${state.googleEnabled?'':' Login Google em configuração.'}`;}}catch{}}

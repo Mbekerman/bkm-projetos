@@ -27,6 +27,9 @@ export function createCloudStore(client) {
   const rows = async query => checked(await query) || [];
   return {
     async projects() { return rows(client.from('projects').select('*').order('created_at', {ascending:false})); },
+    async notifications(projectId=null,unread=true,before=null){return checked(await client.rpc('list_notifications',{p_project_id:projectId,p_unread:unread,p_before:before}));},
+    async markNotification(id,read=true){return checked(await client.rpc('mark_notification',{p_notification_id:id,p_read:read}));},
+    async markNotificationsRead(through,projectId=null){return checked(await client.rpc('mark_notifications_read',{p_through:through,p_project_id:projectId}));},
     async overview(projectId){return checked(await client.rpc('project_overview',{p_project_id:projectId}));},
     async activity(projectId,kind='all',before=null){return checked(await client.rpc('project_activity',{p_project_id:projectId,p_kind:kind,p_before:before,p_limit:25}));},
     async task(projectId,id){return checked(await client.from('project_tasks').select('*').eq('project_id',projectId).eq('id',id).maybeSingle());},
