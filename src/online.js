@@ -74,12 +74,13 @@ async function reload(){
 }
 async function run(work,{close=true}={}){
  if(state.busy)return;state.busy=true;state.error='';
- document.querySelectorAll('button').forEach(b=>b.disabled=true);
+ const disabledButtons=[...document.querySelectorAll('button')].filter(b=>!viewer.contains(b)).map(button=>({button,disabled:button.disabled}));
+ disabledButtons.forEach(({button})=>button.disabled=true);
  const message=modal.open?document.getElementById('cloud-modal-body').querySelector('.form-error'):null;
  if(message){message.hidden=false;message.className='form-error cloud-progress';message.textContent='Processando. Aguarde a confirmação antes de fechar.';}
  try{await work();if(close)modal.close();}
  catch(error){const text=error.message||'Falha na operação. Tente novamente.';if(modal.open){let p=document.getElementById('cloud-modal-body').querySelector('.form-error');if(!p){p=document.createElement('p');document.getElementById('cloud-modal-body').append(p)}p.hidden=false;p.className='form-error';p.setAttribute('role','alert');p.textContent=text;}else state.error=text;}
- finally{state.busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);render();}
+ finally{state.busy=false;disabledButtons.forEach(({button,disabled})=>{if(button.isConnected)button.disabled=disabled;});render();}
 }
 function uploadForm(documentId){
  if(!state.folders.length){toast('Crie uma pasta antes de enviar documentos.');return;}
