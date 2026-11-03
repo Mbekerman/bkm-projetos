@@ -71,6 +71,7 @@ function render(){
  document.getElementById('cloud-sidebar').hidden=!signed;document.getElementById('signout').hidden=!signed;main.classList.toggle('auth-page',!signed);
  document.querySelectorAll('[data-cloud-view]').forEach(b=>{const active=b.dataset.cloudView===state.view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({overview:connectedOverview,activity:connectedActivity,projects:projectsPage,files:filesPage,tasks:connectedTasks,approvals:approvalsPage,participants:participantsPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
+ if(signed&&['overview','activity'].includes(state.view))main.scrollIntoView({block:'start'});
 }
 async function reload(){
  if(!state.user)return;
