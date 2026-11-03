@@ -29,15 +29,16 @@ export function createCloudStore(client) {
     async projects() { return rows(client.from('projects').select('*').order('created_at', {ascending:false})); },
     async members() { return rows(client.from('project_members').select('project_id,user_id,role')); },
     async projectData(projectId) {
-      const [folders,documents,revisions,reviews,tasks,people] = await Promise.all([
+      const [folders,documents,revisions,reviews,tasks,people,invites] = await Promise.all([
         rows(client.from('folders').select('*').eq('project_id', projectId).order('name')),
         rows(client.from('documents').select('*').eq('project_id', projectId).order('title')),
         rows(client.from('document_revisions').select('*').eq('project_id', projectId).order('created_at',{ascending:false})),
         rows(client.from('revision_reviews').select('*').eq('project_id', projectId).order('created_at',{ascending:false})),
         rows(client.from('project_tasks').select('*').eq('project_id',projectId).order('created_at',{ascending:false})),
-        rows(client.rpc('project_people',{p_project_id:projectId}))
+        rows(client.rpc('project_people',{p_project_id:projectId})),
+        rows(client.from('project_access_invites').select('*').eq('project_id',projectId).order('created_at',{ascending:false}))
       ]);
-      return {folders,documents,revisions,reviews,tasks,people};
+      return {folders,documents,revisions,reviews,tasks,people,invites};
     },
     async saveProject(values,id) {
       if (id) return checked(await client.from('projects').update(values).eq('id',id).select().single());
@@ -82,6 +83,10 @@ export function createCloudStore(client) {
       }
       return checked(await client.from('document_revisions').update({upload_state:'ready'}).eq('id',revision.id).eq('upload_state','pending').select().single());
     },
+    async acceptAccess(){return checked(await client.rpc('accept_project_access'));},
+    async addAccess(projectId,email,role){return checked(await client.rpc('add_project_access',{p_project_id:projectId,p_email:email,p_role:role}));},
+    async changeAccess(projectId,id,kind,role){return checked(await client.rpc(kind==='member'?'change_project_member':'change_project_invite',kind==='member'?{p_project_id:projectId,p_user_id:id,p_role:role}:{p_invite_id:id,p_role:role}));},
+    async revokeAccess(projectId,id,kind){return checked(await client.rpc(kind==='member'?'revoke_project_member':'revoke_project_invite',kind==='member'?{p_project_id:projectId,p_user_id:id}:{p_invite_id:id}));},
     async saveTask(values,id){return checked(await (id?client.from('project_tasks').update(values).eq('id',id):client.from('project_tasks').insert(values)).select().single());},
     async taskComments(taskId){return rows(client.from('task_comments').select('*').eq('task_id',taskId).order('created_at'));},
     async addTaskComment(values){return checked(await client.from('task_comments').insert(values).select().single());},
