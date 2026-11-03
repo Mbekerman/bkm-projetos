@@ -79,6 +79,9 @@ export function createCloudStore(client) {
       }
       return checked(await client.from('document_revisions').update({upload_state:'ready'}).eq('id',revision.id).eq('upload_state','pending').select().single());
     },
+    async annotations(revisionId) {return rows(client.from('document_annotations').select('*').eq('revision_id',revisionId).is('deleted_at',null).order('created_at'));},
+    async createAnnotation(values) {return checked(await client.from('document_annotations').insert(values).select().single());},
+    async updateAnnotation(id,values) {return checked(await client.from('document_annotations').update(values).eq('id',id).select().single());},
     async download(revision) {
       if(revision.upload_state!=='ready')throw new Error('O envio desta revisão ainda não foi concluído.');
       const blob=checked(await client.storage.from(BUCKET).download(revision.object_path));

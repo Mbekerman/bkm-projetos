@@ -4,20 +4,22 @@ import {createCloudStore,checked} from '../public/cloud-store.js';
 import {esc,projectForm,folderForm} from '../public/project-ui.js';
 import {folderPath} from '../public/model.js';
 import {googleOptions,normalizeMobile,avatarUrl} from '../public/auth-profile.js';
+import {createAnnotationReview} from '../public/annotation-review.js';
 import {openPdf} from '../public/pdf-viewer.js';
 
 const client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const store=createCloudStore(client), main=document.getElementById('cloud-main'), modal=document.getElementById('cloud-modal'), viewer=document.getElementById('file-viewer');
 const state={profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
-let activeBlob=null,disposePdf=null,authGeneration=0;
+let activeBlob=null,disposePdf=null,review=null,viewerGeneration=0,authGeneration=0;
 const project=()=>state.projects.find(p=>p.id===state.project);
 const own=()=>project()?.owner_id===state.user?.id;
 const editable=()=>!!project()&&!project().archived&&(own()||state.members.some(m=>m.project_id===state.project&&m.user_id===state.user.id&&m.role==='editor'));
 const shape=()=>({projects:state.projects.map(p=>({...p,owner:p.responsible_name,startDate:p.start_date||'',endDate:p.end_date||''})),folders:state.folders.map(f=>({...f,project:f.project_id,parent:f.parent_id}))});
 function toast(text){const el=document.getElementById('toast');el.textContent=text;el.style.display='block';setTimeout(()=>{el.style.display='none'},6000);}
 function dialog(title,body){modal.close();document.getElementById('cloud-modal-body').innerHTML=`<div class="dialog-heading"><h2>${esc(title)}</h2><button data-close-modal aria-label="Fechar">×</button></div>${body}`;modal.showModal();}
-function closeViewer(){disposePdf?.();disposePdf=null;if(activeBlob){URL.revokeObjectURL(activeBlob);activeBlob=null}document.getElementById('viewer-content').replaceChildren();viewer.close();}
-viewer.addEventListener('close',()=>{disposePdf?.();disposePdf=null;if(activeBlob){URL.revokeObjectURL(activeBlob);activeBlob=null}});
+function clearViewer(){viewerGeneration++;review?.dispose();review=null;disposePdf?.();disposePdf=null;if(activeBlob){URL.revokeObjectURL(activeBlob);activeBlob=null}document.getElementById('viewer-content').replaceChildren();document.getElementById('annotation-panel').replaceChildren();}
+function closeViewer(){clearViewer();viewer.close();}
+viewer.addEventListener('close',()=>{if(!viewer.open)clearViewer();});
 function setTheme(value){if(!['light','dark','auto'].includes(value))value='auto';const dark=value==='dark'||value==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=dark?'dark':'light';document.getElementById('theme').value=value;try{localStorage.setItem('bkm-projetos-theme',value)}catch{}}
 let initialTheme='auto';try{initialTheme=localStorage.getItem('bkm-projetos-theme')||'auto'}catch{}setTheme(initialTheme);
 document.getElementById('theme').addEventListener('change',e=>setTheme(e.target.value));
@@ -40,7 +42,7 @@ function filesPage(){
  return `<div class="cloud-row"><div><strong>${esc(d.code)} · ${esc(d.title)}</strong><p>${esc(folderPath(data,d.folder_id).map(f=>f.name).join(' / '))}</p><span class="cloud-file">${ready?`Disponível: ${esc(ready.revision_code)} · ${esc(ready.original_filename)}`:'Nenhum arquivo recebido ainda'}</span>${pending?'<p class="cloud-status">Existe um envio pendente. Abra as revisões para retomar.</p>':''}</div><button data-document="${d.id}">Abrir revisões</button></div>`;}).join('')||'<div class="empty">Nenhum documento nesta seleção.</div>'}</div></section></div>`;
 }
 function profileForm(){const p=state.profile||{},photo=avatarUrl(p.avatar_url);return `<div class="panel cloud-settings">${photo?`<img class="profile-avatar" src="${esc(photo)}" alt="Foto de perfil" referrerpolicy="no-referrer">`:''}<h2>${esc(p.full_name||'Minha conta')}</h2><p>${esc(state.user.email)}</p><form class="form-grid" data-form="profile"><label>Celular<input name="mobile" type="tel" autocomplete="tel" required maxlength="30" placeholder="(11) 99999-9999" value="${esc(p.mobile||'')}"></label><p class="muted">O Google fornece nome, foto e e-mail. Informe seu celular para completar o perfil. Este número não é verificado por SMS.</p><button class="primary" ${state.busy?'disabled':''}>Salvar celular</button></form></div>`;}
-function settingsPage(){return `<div class="cloud-header"><h1>Minha conta</h1></div>${profileForm()}<div class="panel cloud-settings"><div class="settings-row"><div><h2>Acesso conectado</h2><p class="auth-email">${esc(state.user.email)}</p><p class="muted">Cada projeto controla seus participantes.</p></div></div><div class="settings-row"><div><h2>Arquivos</h2><p class="muted">PDF, PNG e JPEG, até 20 MiB. Os originais e cada revisão são preservados.</p></div></div><div class="settings-row"><div><h2>Demonstração local</h2><p class="muted">Seus exemplos locais permanecem separados. A importação para a nuvem ainda não está disponível.</p><a href="index.html">Abrir demonstração</a></div></div><div class="settings-row"><p class="muted">Anotações, IFC, DWG e integração de tarefas ainda serão implementados.</p></div></div>`;}
+function settingsPage(){return `<div class="cloud-header"><h1>Minha conta</h1></div>${profileForm()}<div class="panel cloud-settings"><div class="settings-row"><div><h2>Acesso conectado</h2><p class="auth-email">${esc(state.user.email)}</p><p class="muted">Cada projeto controla seus participantes.</p></div></div><div class="settings-row"><div><h2>Arquivos</h2><p class="muted">PDF, PNG e JPEG, até 20 MiB. Os originais e cada revisão são preservados.</p></div></div><div class="settings-row"><div><h2>Demonstração local</h2><p class="muted">Seus exemplos locais permanecem separados. A importação para a nuvem ainda não está disponível.</p><a href="index.html">Abrir demonstração</a></div></div><div class="settings-row"><p class="muted">Anotações por ponto estão disponíveis em PDF e imagens. IFC, DWG e integração de tarefas serão implementados nas próximas etapas.</p></div></div>`;}
 function render(){
  const signed=!!state.user,needsMobile=signed&&state.user.app_metadata?.providers?.includes('google')&&!state.profile?.mobile;
  document.getElementById('cloud-sidebar').hidden=!signed;document.getElementById('signout').hidden=!signed;main.classList.toggle('auth-page',!signed);
@@ -73,12 +75,17 @@ function documentDialog(id){const d=state.documents.find(d=>d.id===id);if(!d)ret
 }
 async function viewRevision(id,download=false){
  const r=state.revisions.find(r=>r.id===id);if(!r)throw Error('Revisão não encontrada.');
- const blob=await store.download(r);
+ if(!download)closeViewer();const generation=viewerGeneration;
+ const blob=await store.download(r);if(!download&&generation!==viewerGeneration)return;
  if(download){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=r.original_filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);return;}
- modal.close();closeViewer();document.getElementById('viewer-title').textContent=`${r.original_filename} · ${r.revision_code}`;viewer.showModal();
- const content=document.getElementById('viewer-content'),tools=document.getElementById('viewer-tools');tools.hidden=r.mime_type!=='application/pdf';content.innerHTML='<p class="note">Abrindo arquivo…</p>';
- try{if(r.mime_type==='application/pdf')disposePdf=await openPdf(blob,content,tools);else{activeBlob=URL.createObjectURL(blob);const img=document.createElement('img');img.alt=r.original_filename;img.src=activeBlob;content.replaceChildren(img);}}
- catch{content.textContent='Não foi possível visualizar este arquivo. Verifique se ele está íntegro e se o PDF não exige senha. O original continua disponível para download.';}
+ modal.close();document.getElementById('viewer-title').textContent=`${r.original_filename} · ${r.revision_code}`;viewer.showModal();
+ const content=document.getElementById('viewer-content'),tools=document.getElementById('viewer-tools'),panel=document.getElementById('annotation-panel');tools.hidden=r.mime_type!=='application/pdf';content.innerHTML='<p class="note">Abrindo arquivo…</p>';panel.textContent='Carregando anotações…';
+ try{const session=await createAnnotationReview({revision:r,store,panel,userId:state.user.id,ownerId:project()?.owner_id,canWrite:editable()});if(generation!==viewerGeneration){session.dispose();return;}review=session;}
+ catch{if(generation!==viewerGeneration)return;panel.textContent='Não foi possível carregar as anotações. Feche e abra a revisão para tentar novamente.';}
+ try{
+  if(r.mime_type==='application/pdf'){const dispose=await openPdf(blob,content,tools,{onPage:surface=>{if(generation===viewerGeneration)review?.attach(surface);}});if(generation!==viewerGeneration){dispose();return;}disposePdf=dispose;}
+  else{activeBlob=URL.createObjectURL(blob);const img=document.createElement('img');img.alt=r.original_filename;img.src=activeBlob;const surface=document.createElement('div');surface.className='annotation-surface image-surface';surface.append(img);content.replaceChildren(surface);review?.attach({element:surface,pageNumber:1});}
+ }catch{if(generation!==viewerGeneration)return;review?.dispose();review=null;panel.replaceChildren();content.textContent='Não foi possível visualizar este arquivo. Verifique se ele está íntegro e se o PDF não exige senha. O original continua disponível para download.';}
 }
 document.addEventListener('click',async e=>{
  const button=e.target.closest('button');if(!button)return;const d=button.dataset;
