@@ -35,7 +35,7 @@ export async function createAnnotationReview({revision,store,panel,userId,ownerI
   if(d.noteStatus){const n=rows.find(n=>n.id===d.noteStatus);if(!n||!canManage(n))return;await operation(async()=>{const saved=await store.updateAnnotation(n.id,{status:n.status==='resolved'?'open':'resolved'});rows=rows.map(r=>r.id===saved.id?saved:r);});}
   if(d.noteRemove){const n=rows.find(n=>n.id===d.noteRemove);if(!n||!canManage(n))return;await operation(async()=>{const saved=await store.updateAnnotation(n.id,{deleted_at:new Date().toISOString()});rows=rows.map(r=>r.id===saved.id?saved:r);});}
  };
- const change=e=>{captureBody();const d=e.target.dataset;
+ const change=e=>{if(!e.target.matches('[data-drawing-tool],[data-drawing-color],[data-drawing-weight],[data-drawing-font]'))return;captureBody();const d=e.target.dataset;
   if(d.drawingTool!==undefined){tool=e.target.value;placing=false;stroke=null;draft=null;}
   if(d.drawingColor!==undefined){color=e.target.value;if(draft)draft.stroke_color=color;}
   if(d.drawingWeight!==undefined){weight=Number(e.target.value);if(draft)draft.stroke_width=weight;}

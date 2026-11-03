@@ -20,7 +20,7 @@ export function renderAnnotationShape(note,{width,height,selected=false,draft=fa
   const join={x:Math.max(left,Math.min(left+boxW,start.x)),y:Math.max(top,Math.min(top+boxH,start.y))};arrow(join,start);
   group.append(svg('rect',{x:left,y:top,width:boxW,height:boxH,rx:12}));text(left+12,top+fontSize+9,note.body||'Chamada');
  }
- if(!draft){const select=e=>{e.stopPropagation();onSelect?.();};group.addEventListener('click',select);group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(e);}});}
+ if(!draft){for(const child of [...group.children]){if(child.tagName.toLowerCase()==='text'){child.style.pointerEvents='all';continue;}const hit=child.cloneNode(true);hit.setAttribute('stroke','transparent');hit.setAttribute('stroke-width',String(Math.max(16,weight)));hit.setAttribute('aria-hidden','true');hit.style.pointerEvents='stroke';group.prepend(hit);}const select=e=>{e.stopPropagation();onSelect?.();};group.addEventListener('click',select);group.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(e);}});}
  return group;
 }
 export function createDrawingSvg(width,height){return svg('svg',{class:'annotation-drawing',viewBox:`0 0 ${width} ${height}`,width:'100%',height:'100%','aria-label':'Marcações da prancha'});}
