@@ -6,3 +6,5 @@ await cp('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','public/dist/pdf.wor
 for(const name of ['cmaps','standard_fonts','wasm'])await cp(`node_modules/pdfjs-dist/${name}`,`public/dist/${name}`,{recursive:true});
 for(const [from,to] of [['node_modules/pdfjs-dist/LICENSE','public/dist/PDFJS-LICENSE.txt'],['node_modules/@supabase/supabase-js/LICENSE','public/dist/SUPABASE-LICENSE.txt']])await cp(from,to);
 console.log('Aplicativo conectado e visualizador compilados.');
+
+await build({entryPoints:['src/online.js'],outfile:'public/dist/approval-test.js',bundle:true,format:'esm',platform:'browser',target:'es2022',alias:{'@supabase/supabase-js':new URL('../tests/approval-supabase-mock.js',import.meta.url).pathname}});

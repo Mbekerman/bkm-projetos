@@ -1,0 +1,100 @@
+begin;
+select set_config('bkm.ann_owner',gen_random_uuid()::text,true),set_config('bkm.ann_editor',gen_random_uuid()::text,true),set_config('bkm.ann_reader',gen_random_uuid()::text,true),set_config('bkm.ann_outsider',gen_random_uuid()::text,true),set_config('bkm.ann_project',gen_random_uuid()::text,true),set_config('bkm.ann_note','',true);
+insert into auth.users(id) values(current_setting('bkm.ann_owner')::uuid),(current_setting('bkm.ann_editor')::uuid),(current_setting('bkm.ann_reader')::uuid),(current_setting('bkm.ann_outsider')::uuid);
+set local role authenticated;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_owner'),true);
+insert into public.projects(id,code,name) values(current_setting('bkm.ann_project')::uuid,'ANNOTATIONS-TEST','Temporário');
+insert into public.project_members(project_id,user_id,role) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_editor')::uuid,'editor'),(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_reader')::uuid,'reader');
+reset role;
+do $$ declare f uuid=gen_random_uuid();d uuid=gen_random_uuid();r uuid=gen_random_uuid();pending uuid=gen_random_uuid();img uuid=gen_random_uuid();begin
+ insert into public.folders(id,project_id,name) values(f,current_setting('bkm.ann_project')::uuid,'Teste');
+ insert into public.documents(id,project_id,folder_id,code,title,created_by) values(d,current_setting('bkm.ann_project')::uuid,f,'TEST','Teste',current_setting('bkm.ann_owner')::uuid);
+ insert into public.document_revisions(id,project_id,document_id,revision_code,object_path,original_filename,mime_type,file_size,created_by,upload_state) values
+ (r,current_setting('bkm.ann_project')::uuid,d,'R00',current_setting('bkm.ann_project')||'/'||r||'/original.pdf','original.pdf','application/pdf',1024,current_setting('bkm.ann_owner')::uuid,'ready'),
+ (pending,current_setting('bkm.ann_project')::uuid,d,'R01',current_setting('bkm.ann_project')||'/'||pending||'/original.pdf','original.pdf','application/pdf',1024,current_setting('bkm.ann_owner')::uuid,'pending'),
+ (img,current_setting('bkm.ann_project')::uuid,d,'IMG',current_setting('bkm.ann_project')||'/'||img||'/original.png','original.png','image/png',1024,current_setting('bkm.ann_owner')::uuid,'ready');
+ perform set_config('bkm.ann_revision',r::text,true);perform set_config('bkm.ann_pending',pending::text,true);perform set_config('bkm.ann_image',img::text,true);
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_editor'),true);
+do $$ declare review uuid;begin
+ review=public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Conferir cotas');perform set_config('bkm.review_id',review::text,true);
+ if (select status from public.revision_reviews where id=review)<>'in_review' then raise exception 'Review not created';end if;
+ begin perform public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Duplicada');raise exception 'TEST FAILED: duplicate accepted';exception when raise_exception then if sqlerrm not like 'Esta revisão já está em análise%' then raise;end if;end;
+ begin perform public.request_revision_review(current_setting('bkm.ann_pending')::uuid,'Pendente');raise exception 'TEST FAILED: pending accepted';exception when check_violation then null;end;
+ begin perform public.decide_revision_review(review,'approved','');raise exception 'TEST FAILED: editor decided';exception when insufficient_privilege then null;end;
+ begin update public.revision_reviews set status='approved' where id=review;raise exception 'TEST FAILED: direct update accepted';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_reader'),true);
+do $$ begin
+ if not exists(select 1 from public.revision_reviews where id=current_setting('bkm.review_id')::uuid) then raise exception 'Reader cannot read';end if;
+ begin perform public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Leitor');raise exception 'Reader requested';exception when insufficient_privilege then null;end;
+ begin perform public.decide_revision_review(current_setting('bkm.review_id')::uuid,'approved','');raise exception 'Reader decided';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_outsider'),true);
+do $$ begin
+ if exists(select 1 from public.revision_reviews where id=current_setting('bkm.review_id')::uuid) then raise exception 'Outsider sees review';end if;
+ begin perform public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Externo');raise exception 'Outsider requested';exception when insufficient_privilege then null;end;
+ begin perform public.decide_revision_review(current_setting('bkm.review_id')::uuid,'approved','');raise exception 'Outsider decided';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_owner'),true);
+do $$ declare review uuid=current_setting('bkm.review_id')::uuid;second uuid;begin
+ begin perform public.decide_revision_review(review,'changes_requested',' ');raise exception 'Empty adjustments accepted';exception when check_violation then null;end;
+ begin perform public.decide_revision_review(review,'forged','texto');raise exception 'Invalid outcome accepted';exception when check_violation then null;end;
+ perform public.decide_revision_review(review,'changes_requested','Corrigir cotas');
+ if not exists(select 1 from public.revision_reviews where id=review and status='changes_requested' and decided_by=current_setting('bkm.ann_owner')::uuid and decision_message='Corrigir cotas') then raise exception 'Decision missing';end if;
+ begin perform public.decide_revision_review(review,'approved','');raise exception 'TEST FAILED: decision overwritten';exception when raise_exception then if sqlerrm not like 'Esta análise já foi encerrada%' then raise;end if;end;
+ second=public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Cotas verificadas');
+ if (select round_number from public.revision_reviews where id=second)<>2 then raise exception 'Round incorrect';end if;
+ perform public.decide_revision_review(second,'approved_with_comments','Conferir em obra');
+ second=public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Conferência final');perform public.decide_revision_review(second,'approved','');
+ if (select count(*) from public.revision_reviews where revision_id=current_setting('bkm.ann_revision')::uuid)<>3 then raise exception 'History missing';end if;
+ if exists(select 1 from public.revision_reviews where revision_id=current_setting('bkm.ann_pending')::uuid) then raise exception 'Approval copied to new revision';end if;
+ if not exists(select 1 from public.audit_events where entity_type='revision_reviews' and entity_id=review::text and action='UPDATE') then raise exception 'Review audit missing';end if;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_editor'),true);
+
+do $$ declare n uuid; r uuid;begin
+ insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_revision')::uuid,1,.25,.75,'Rever cota') returning id into n;
+ perform set_config('bkm.ann_note',n::text,true);
+ update public.document_annotations set status='resolved' where id=n returning id into r;
+ if r is null then raise exception 'Resolve returning failed';end if;
+ update public.document_annotations set status='open' where id=n;
+ begin update public.document_annotations set body='alterado' where id=n;raise exception 'Immutable content changed';exception when insufficient_privilege then null;end;
+ begin update public.document_annotations set created_by=current_setting('bkm.ann_owner')::uuid where id=n;raise exception 'Author spoof accepted';exception when insufficient_privilege then null;end;
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_pending')::uuid,1,0,0,'pending');raise exception 'Pending annotation accepted';exception when insufficient_privilege then null;end;
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_image')::uuid,2,0,0,'wrong page');raise exception 'Image page 2 accepted';exception when insufficient_privilege then null;end;
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_revision')::uuid,1,1.1,0,'out of bounds');raise exception 'Invalid coordinates accepted';exception when check_violation then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_outsider'),true);
+do $$ begin
+ if exists(select 1 from public.document_annotations where project_id=current_setting('bkm.ann_project')::uuid) then raise exception 'Outsider sees annotations';end if;
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_revision')::uuid,1,0,0,'outsider');raise exception 'Outsider annotation accepted';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_reader'),true);
+do $$ begin
+ if not exists(select 1 from public.document_annotations where id=current_setting('bkm.ann_note')::uuid) then raise exception 'Reader cannot read';end if;
+ update public.document_annotations set status='resolved' where id=current_setting('bkm.ann_note')::uuid;if found then raise exception 'Reader updated';end if;
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_revision')::uuid,1,0,0,'reader');raise exception 'Reader annotation accepted';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub',current_setting('bkm.ann_owner'),true);
+do $$ declare n uuid;begin
+ update public.document_annotations set deleted_at=now() where id=current_setting('bkm.ann_note')::uuid returning id into n;
+ if n is null then raise exception 'Owner removal failed';end if;
+ update public.document_annotations set deleted_at=null where id=n;if found then raise exception 'Removed annotation restored';end if;
+ if not exists(select 1 from public.audit_events where entity_id=n::text and entity_type='document_annotations' and action='UPDATE') then raise exception 'Audit missing';end if;
+end $$;
+update public.projects set archived=true where id=current_setting('bkm.ann_project')::uuid;
+do $$ begin
+ begin insert into public.document_annotations(project_id,revision_id,page_number,x,y,body) values(current_setting('bkm.ann_project')::uuid,current_setting('bkm.ann_revision')::uuid,1,0,0,'archived');raise exception 'Archived annotation accepted';exception when insufficient_privilege then null;end;
+end $$;
+do $$ begin
+ begin perform public.request_revision_review(current_setting('bkm.ann_revision')::uuid,'Arquivado');raise exception 'Archived requested';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+do $$ begin
+ if has_function_privilege('anon','public.request_revision_review(uuid,text)','EXECUTE') then raise exception 'Anonymous RPC grant';end if;
+ if has_table_privilege('authenticated','public.revision_reviews','UPDATE') then raise exception 'Direct write grant';end if;
+end $$;
+select 'PASS: review requests, three outcomes, immutable history, duplicate/stale decisions, roles, archived, pending revision and audit' verification;
+rollback;
