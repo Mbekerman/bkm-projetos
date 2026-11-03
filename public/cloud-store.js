@@ -27,6 +27,9 @@ export function createCloudStore(client) {
   const rows = async query => checked(await query) || [];
   return {
     async projects() { return rows(client.from('projects').select('*').order('created_at', {ascending:false})); },
+    async overview(projectId){return checked(await client.rpc('project_overview',{p_project_id:projectId}));},
+    async activity(projectId,kind='all',before=null){return checked(await client.rpc('project_activity',{p_project_id:projectId,p_kind:kind,p_before:before,p_limit:25}));},
+    async task(projectId,id){return checked(await client.from('project_tasks').select('*').eq('project_id',projectId).eq('id',id).maybeSingle());},
     async members() { return rows(client.from('project_members').select('project_id,user_id,role')); },
     async projectData(projectId) {
       const [folders,documents,revisions,reviews,tasks,people,invites] = await Promise.all([

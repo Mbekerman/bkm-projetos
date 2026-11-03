@@ -9,11 +9,12 @@ import {latestReview,reviewMessage,reviewBadge,reviewHistory,requestReviewForm,d
 import {taskValues} from '../public/task-model.js';
 import {tasksPage,taskForm,taskDetails,taskRevisionOptions} from '../public/task-ui.js';
 import {projectAccessPage,addAccessForm,changeAccessForm,revokeAccessForm,corporateEmail,accessRole} from '../public/project-access.js';
+import {overviewPage,activityPage} from '../public/project-overview.js';
 import {openPdf} from '../public/pdf-viewer.js';
 
 const client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const store=createCloudStore(client), main=document.getElementById('cloud-main'), modal=document.getElementById('cloud-modal'), viewer=document.getElementById('file-viewer');
-const state={profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[],taskView:'board',taskFilter:{query:'',assignee:'',priority:'',overdue:false,archived:false},reviewFilter:'in_review',project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
+const state={overview:null,activity:null,activityKind:'all',activityCursors:[null],profile:null,googleEnabled:false,user:null,projects:[],members:[],folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[],taskView:'board',taskFilter:{query:'',assignee:'',priority:'',overdue:false,archived:false},reviewFilter:'in_review',project:null,folder:null,view:'projects',authMode:'login',busy:false,query:'',error:'',message:''};
 let activeBlob=null,disposePdf=null,review=null,viewerGeneration=0,authGeneration=0;
 const project=()=>state.projects.find(p=>p.id===state.project);
 const own=()=>project()?.owner_id===state.user?.id;
@@ -40,7 +41,7 @@ function loginPage(){
 }
 function projectsPage(){
  const filtered=state.projects.filter(p=>`${p.code} ${p.name} ${p.city}`.toLocaleLowerCase().includes(state.query.toLocaleLowerCase()));
- return `<div class="cloud-header"><div><p class="eyebrow">Ambiente conectado</p><h1>Projetos</h1><p>Projetos aos quais sua conta tem acesso.</p><button data-refresh>Atualizar acessos</button></div><button class="primary" data-new-project>+ Novo projeto</button></div><form class="cloud-search" data-form="search"><label>Buscar projetos<input name="query" type="search" value="${esc(state.query)}" placeholder="Código, nome ou município"></label><button class="quiet">Buscar</button></form><div class="grid">${filtered.map(p=>`<article class="project-card"><div class="project-art"><img src="assets/projetos.svg" alt=""><span>${esc(p.code)}</span></div><div class="card-body"><span class="tag">${esc(p.archived?'Arquivado':p.status)}</span><h2>${esc(p.name)}</h2><p class="muted">${esc(p.city||'Município não informado')}</p><p class="muted">${esc(p.responsible_name||'Responsável não informado')}</p><div class="cloud-actions"><button class="primary" data-open-project="${p.id}">Abrir diretórios</button><button data-project-team="${p.id}">Equipe</button>${p.owner_id===state.user.id?`<button data-edit-project="${p.id}">Editar</button>`:''}</div></div></article>`).join('')}</div>${filtered.length?'':'<div class="empty"><strong>Nenhum projeto encontrado</strong><p>Crie seu primeiro projeto ou solicite participação ao responsável.</p></div>'}`;
+ return `<div class="cloud-header"><div><p class="eyebrow">Ambiente conectado</p><h1>Projetos</h1><p>Projetos aos quais sua conta tem acesso.</p><button data-refresh>Atualizar acessos</button></div><button class="primary" data-new-project>+ Novo projeto</button></div><form class="cloud-search" data-form="search"><label>Buscar projetos<input name="query" type="search" value="${esc(state.query)}" placeholder="Código, nome ou município"></label><button class="quiet">Buscar</button></form><div class="grid">${filtered.map(p=>`<article class="project-card"><div class="project-art"><img src="assets/projetos.svg" alt=""><span>${esc(p.code)}</span></div><div class="card-body"><span class="tag">${esc(p.archived?'Arquivado':p.status)}</span><h2>${esc(p.name)}</h2><p class="muted">${esc(p.city||'Município não informado')}</p><p class="muted">${esc(p.responsible_name||'Responsável não informado')}</p><div class="cloud-actions"><button class="primary" data-project-overview="${p.id}">Visão geral</button><button data-open-project="${p.id}">Abrir diretórios</button><button data-project-team="${p.id}">Equipe</button>${p.owner_id===state.user.id?`<button data-edit-project="${p.id}">Editar</button>`:''}</div></div></article>`).join('')}</div>${filtered.length?'':'<div class="empty"><strong>Nenhum projeto encontrado</strong><p>Crie seu primeiro projeto ou solicite participação ao responsável.</p></div>'}`;
 }
 function filesPage(){
  if(!project())return '<div class="empty"><h1>Selecione um projeto</h1><p>Abra um projeto na lista para consultar os diretórios.</p><button data-cloud-view="projects">Ver projetos</button></div>';
@@ -50,10 +51,14 @@ function filesPage(){
  const revisions=state.revisions.filter(r=>r.document_id===d.id),ready=revisions.find(r=>r.upload_state==='ready'),pending=revisions.some(r=>r.upload_state==='pending');
  return `<div class="cloud-row"><div><strong>${esc(d.code)} · ${esc(d.title)}</strong><p>${esc(folderPath(data,d.folder_id).map(f=>f.name).join(' / '))}</p><span class="cloud-file">${ready?`Disponível: ${esc(ready.revision_code)} · ${esc(ready.original_filename)}`:'Nenhum arquivo recebido ainda'}</span>${ready?`<div>${reviewBadge(latestReview(state.reviews,ready.id))}</div>`:''}${pending?'<p class="cloud-status">Existe um envio pendente. Abra as revisões para retomar.</p>':''}</div><button data-document="${d.id}">Abrir revisões</button></div>`;}).join('')||'<div class="empty">Nenhum documento nesta seleção.</div>'}</div></section></div>`;
 }
+function connectedOverview(){return overviewPage({project:project(),projects:state.projects,overview:state.overview,people:state.people});}
+function connectedActivity(){return activityPage({project:project(),projects:state.projects,activity:state.activity,kind:state.activityKind,hasPrevious:state.activityCursors.length>1,people:state.people});}
+async function loadOperations(){const id=state.project,user=state.user?.id,view=state.view;if(!id)return;const value=view==='overview'?await store.overview(id):view==='activity'?await store.activity(id,state.activityKind,state.activityCursors.at(-1)):null;if(state.project===id&&state.user?.id===user&&state.view===view&&value)state[view]=value;}
+function resetOperations(){state.overview=null;state.activity=null;state.activityCursors=[null];}
 function participantsPage(){return projectAccessPage({project:project(),projects:state.projects,people:state.people,invites:state.invites,isOwner:own()});}
 function connectedTasks(){return tasksPage({project:project(),projects:state.projects,tasks:state.tasks,people:state.people,canWrite:editable(),view:state.taskView,filter:state.taskFilter});}
 function openTaskForm(task={}){if(!editable())return;dialog(task.id?'Editar tarefa':'Nova tarefa',taskForm({task,people:state.people,documents:state.documents,revisions:state.revisions,userId:state.user.id}));}
-async function taskDialog(id){const task=state.tasks.find(t=>t.id===id);if(!task)return;const comments=await store.taskComments(id);dialog(task.title,taskDetails(task,{people:state.people,documents:state.documents,revisions:state.revisions,comments,canWrite:editable()}));}
+async function taskDialog(id){const task=await store.task(state.project,id);if(!task)throw Error('Tarefa indisponível. Atualize o projeto para verificar seu acesso.');const index=state.tasks.findIndex(t=>t.id===id);if(index<0)state.tasks.push(task);else state.tasks[index]=task;const comments=await store.taskComments(id);dialog(task.title,taskDetails(task,{people:state.people,documents:state.documents,revisions:state.revisions,comments,canWrite:editable()}));}
 function approvalsPage(){
  if(!project())return '<div class="empty"><h1>Análises de revisões</h1><p>Crie ou abra um projeto para acompanhar os pareceres.</p><button data-cloud-view="projects">Ver projetos</button></div>';
  const reviews=state.reviews.filter(r=>state.reviewFilter==='all'||r.status===state.reviewFilter);
@@ -65,7 +70,8 @@ function render(){
  const signed=!!state.user,needsMobile=signed&&state.user.app_metadata?.providers?.includes('google')&&!state.profile?.mobile;
  document.getElementById('cloud-sidebar').hidden=!signed;document.getElementById('signout').hidden=!signed;main.classList.toggle('auth-page',!signed);
  document.querySelectorAll('[data-cloud-view]').forEach(b=>{const active=b.dataset.cloudView===state.view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
- main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({projects:projectsPage,files:filesPage,tasks:connectedTasks,approvals:approvalsPage,participants:participantsPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
+ main.innerHTML=needsMobile?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}<h1>Complete seu perfil</h1>${profileForm()}`:signed?`${state.error?`<p role="alert" class="cloud-error">${esc(state.error)}</p>`:''}${state.busy?'<p class="cloud-progress" role="status">Carregando…</p>':''}${({overview:connectedOverview,activity:connectedActivity,projects:projectsPage,files:filesPage,tasks:connectedTasks,approvals:approvalsPage,participants:participantsPage,settings:settingsPage}[state.view]||projectsPage)()}`:loginPage();
+ if(signed&&['overview','activity'].includes(state.view))main.scrollIntoView({block:'start'});
 }
 async function reload(){
  if(!state.user)return;
@@ -74,6 +80,7 @@ async function reload(){
  if(!state.projects.some(p=>p.id===state.project))state.project=state.projects[0]?.id||null;
  if(state.project)Object.assign(state,await store.projectData(state.project));else Object.assign(state,{folders:[],documents:[],revisions:[],reviews:[],tasks:[],people:[],invites:[]});
  if(!state.folders.some(f=>f.id===state.folder))state.folder=null;
+ resetOperations();await loadOperations();
 }
 async function run(work,{close=true}={}){
  if(state.busy)return;state.busy=true;state.error='';
@@ -115,7 +122,9 @@ document.addEventListener('click',async e=>{
  if(d.closeModal!==undefined||d.act==='close'){modal.close();return;}
  if(d.googleLogin!==undefined){await run(async()=>{if(!state.googleEnabled)throw Error('Login Google ainda em configuração.');checked(await client.auth.signInWithOAuth(googleOptions()));},{close:false});return;}
  if(d.authMode){state.authMode=d.authMode;state.error='';state.message='';render();return;}
- if(d.cloudView){state.view=d.cloudView;state.query='';render();return;}
+ if(d.cloudView){state.view=d.cloudView;state.query='';if(['overview','activity'].includes(state.view)){resetOperations();await run(loadOperations);}else render();return;}
+ if(d.projectOverview){state.project=d.projectOverview;state.folder=null;state.view='overview';resetOperations();await run(reload);return;}
+ if(d.activityNext!==undefined||d.activityPrev!==undefined){const old=[...state.activityCursors];if(d.activityNext!==undefined){if(!state.activity?.has_more)return;state.activityCursors.push(state.activity.next_cursor);}else if(state.activityCursors.length>1)state.activityCursors.pop();else return;await run(async()=>{try{await loadOperations();}catch(error){state.activityCursors=old;throw error;}});return;}
  if(d.openProject){state.project=d.openProject;state.folder=null;state.query='';state.view='files';await run(reload);return;}
  if(d.editProject){state.project=d.editProject;dialog('Editar projeto',projectForm(shape(),state.project)+`<div class="dialog-actions"><button data-toggle-archive>${project().archived?'Restaurar':'Arquivar'} projeto</button></div>`);return;}
  if(d.newProject!==undefined){dialog('Novo projeto',projectForm(shape()));return;}
@@ -143,12 +152,12 @@ document.addEventListener('click',async e=>{
  if(d.refresh!==undefined){await run(reload);return;}
  if(d.toggleArchive!==undefined){const p=project();dialog(p.archived?'Restaurar projeto':'Arquivar projeto',`<p>${p.archived?'Restaurar':'Arquivar'} ${esc(p.name)}? Os documentos serão preservados.</p><div class="dialog-actions"><button data-close-modal>Cancelar</button><button data-confirm-archive class="primary">Confirmar</button></div>`);return;}
  if(d.confirmArchive!==undefined)await run(async()=>{await store.saveProject({archived:!project().archived},state.project);await reload();toast('Projeto atualizado.');});
- if(button.id==='signout')await run(async()=>{checked(await client.auth.signOut());closeViewer();state.user=null;state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;});
+ if(button.id==='signout')await run(async()=>{checked(await client.auth.signOut());closeViewer();state.user=null;state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();});
 });
 document.addEventListener('change',async e=>{if(e.target.matches('[data-task-stage-select]')){const label=e.target.form.querySelector('[data-task-pause-label]');label.hidden=e.target.value!=='paused';label.querySelector('textarea').required=e.target.value==='paused';}
  if(e.target.matches('[data-task-document]')){const form=e.target.form,select=form.querySelector('[data-task-revision]');select.innerHTML=taskRevisionOptions(state.revisions,e.target.value,null);select.disabled=!e.target.value;form.elements.annotation_id.value='';form.querySelector('[data-task-annotation-label]').hidden=true;}
  if(e.target.matches('[data-task-revision]')){e.target.form.elements.annotation_id.value='';e.target.form.querySelector('[data-task-annotation-label]').hidden=true;}
- if(e.target.matches('[data-review-outcome]')){e.target.form.querySelector('textarea[name="message"]').required=e.target.value!=='approved';}if(e.target.id==='review-filter'){state.reviewFilter=e.target.value;render();return;}if(e.target.id==='cloud-project'){state.project=e.target.value;state.folder=null;state.query='';await run(reload);}});
+ if(e.target.matches('[data-review-outcome]')){e.target.form.querySelector('textarea[name="message"]').required=e.target.value!=='approved';}if(e.target.id==='review-filter'){state.reviewFilter=e.target.value;render();return;}if(e.target.id==='activity-kind'){state.activityKind=e.target.value;resetOperations();await run(loadOperations);return;}if(e.target.id==='cloud-project'){state.project=e.target.value;state.folder=null;state.query='';resetOperations();await run(reload);}});
 document.addEventListener('submit',async e=>{
  const form=e.target.closest('form');if(!form)return;e.preventDefault();if(state.busy)return;
  const f=Object.fromEntries(new FormData(form)),kind=form.dataset.form;
@@ -193,9 +202,9 @@ async function refreshAuth(){
  try{const {data,error}=await client.auth.getUser();if(generation!==authGeneration)return;
   if(error&&error.name!=='AuthSessionMissingError')throw error;
   const previous=state.user?.id;state.user=data.user||null;
-  if(!state.user){state.profile=null;closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;render();return;}
+  if(!state.user){state.profile=null;closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();render();return;}
   state.profile=checked(await client.from('user_profiles').select('id,full_name,avatar_url,mobile').eq('id',state.user.id).single());
-  if(previous!==state.user.id){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;state.folder=null;await reload();}state.error='';render();
+  if(previous!==state.user.id){closeViewer();modal.close();state.projects=[];state.members=[];state.folders=[];state.documents=[];state.revisions=[];state.reviews=[];state.tasks=[];state.people=[];state.invites=[];state.project=null;resetOperations();state.folder=null;await reload();}state.error='';render();
  }catch(error){state.error='Não foi possível verificar sua sessão. Confira a conexão e tente entrar novamente.';render();}
 }
 async function loadProviders(){try{const response=await fetch(`${SUPABASE_URL}/auth/v1/settings`,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY},signal:AbortSignal.timeout(10000)});if(response.ok){const settings=await response.json();state.googleEnabled=settings.external?.google===true;const button=main.querySelector('[data-google-login]');if(button)button.disabled=!state.googleEnabled||state.busy;const info=main.querySelector('[data-google-info]');if(info)info.textContent=`Contas @bkm.com.br entram sem cadastro e sem senha.${state.googleEnabled?'':' Login Google em configuração.'}`;}}catch{}}

@@ -2,7 +2,7 @@
 
 Frente de desenvolvimento independente para gestão de projetos, documentos e tarefas da BKM, inspirada nos fluxos estudados do Autodoc. Interface Material Design 3 com ativos oficiais BKM.
 
-## Estado inicial
+## Estado atual (0.9)
 
 A demonstração local de index.html usa dados fictícios salvos no navegador. O ambiente conectado de online.html usa o Supabase dedicado, com autenticação própria e armazenamento privado; sua homologação está descrita abaixo. A integração com o Terrenos ainda não foi implementada.
 
@@ -11,11 +11,18 @@ A demonstração local de index.html usa dados fictícios salvos no navegador. O
 - Tarefas: lista/quadro, criação, responsáveis, comentários e mudanças de situação.
 - Temas claro, escuro e automático; layout responsivo.
 
-## Ambiente conectado (0.3)
+## Ambiente conectado
 
-`online.html` adiciona autenticação por e-mail e senha e acesso ao projeto Supabase dedicado. Projetos, pastas, documentos e revisões desse ambiente usam o banco remoto e RLS. A demonstração de `index.html` continua local e tem um botão para entrar no ambiente conectado; nenhum exemplo é enviado automaticamente.
+`online.html` usa o Supabase dedicado BKM_autodoc. Login Google @bkm.com.br dispensa cadastro e senha; o acesso por senha legado continua disponível. RLS limita cada projeto a seu proprietário e participantes. Documentos e revisões ficam em Storage privado, com confirmação e retomada de upload.
 
-PDF, PNG e JPEG de até 20 MiB podem ser enviados, versionados, retomados após interrupção, visualizados e baixados. PDF.js renderiza as páginas com zoom dentro do aplicativo. A confirmação de recebimento no banco verifica o objeto esperado no Storage. Veja `docs/Entrega_03_Arquivos.md` para validações e limites de homologação.
+- Arquivos PDF, PNG e JPEG de até 20 MiB; visualização interna com zoom e páginas.
+- Marcações por revisão: desenho livre, formas, linhas, setas, texto e comentários.
+- Solicitação de análise e parecer do proprietário, com histórico por revisão.
+- Tarefas vinculadas a documentos/revisões/marcações, com responsáveis, prazos, prioridades, pausa e comentários.
+- Equipe por projeto: autorizações BKM, editor/leitor, primeiro acesso Google, troca de papel e revogação.
+- Visão geral: totais calculados no banco, atrasos, minhas tarefas e pendências; histórico de alterações com autor, filtros e paginação.
+
+Veja `docs/Entrega_03_Arquivos.md` até `docs/Entrega_09_Operacao.md` para regras e verificações. IFC/DWG, notificações e integração com Terrenos ainda não foram implementados. O aplicativo permanece em homologação/piloto.
 
 ## Rodar
 
@@ -37,6 +44,6 @@ O repositório inclui Dockerfile com compilação, Caddyfile e railway.json. O s
 
 `public/app.js`: comportamento e dados simulados; `public/styles.css`: tokens e componentes BKM; `public/assets`: SVGs oficiais; `docs`: identidade visual.
 
-O futuro adaptador de dados deverá substituir a persistência local e reutilizar o motor `fluxo` do Terrenos após a confirmação de sua implantação. Nenhuma migration faz parte desta entrega.
+O ambiente conectado usa `src/online.js` e `public/cloud-store.js`. As definições SQL e verificações estão em `db/`. O núcleo de tarefas foi adaptado do motor `fluxo`, com dados e permissões próprios deste aplicativo. A demonstração local continua separada.
 
 Código privado da BKM. Os ativos de marca foram fornecidos pelo titular e devem ser usados somente nos projetos autorizados da empresa.
