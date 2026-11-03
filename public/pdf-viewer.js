@@ -1,10 +1,10 @@
 import * as pdfjs from 'pdfjs-dist';
 import {createPdfDisposer} from './pdf-lifecycle.js';
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs',import.meta.url).href;
-export async function openPdf(blob,container,controls,{onPage}={}) {
+export async function openPdf(blob,container,controls,{onPage,initialPage=1}={}) {
   const task=pdfjs.getDocument({data:new Uint8Array(await blob.arrayBuffer()),cMapUrl:new URL('./cmaps/',import.meta.url).href,cMapPacked:true,standardFontDataUrl:new URL('./standard_fonts/',import.meta.url).href,wasmUrl:new URL('./wasm/',import.meta.url).href,isEvalSupported:false});
   let doc;try{doc=await task.promise;}catch(error){await createPdfDisposer(task,()=>{})();throw error;}
-  let page=1,scale=1,renderTask=null,closed=false,pending=false;
+  let page=Math.max(1,Math.min(doc.numPages,Number.isInteger(initialPage)?initialPage:1)),scale=1,renderTask=null,closed=false,pending=false;
   const surface=document.createElement('div');surface.className='annotation-surface';const canvas=document.createElement('canvas');surface.append(canvas);container.replaceChildren(surface);
   async function render() {
     if(closed)return;

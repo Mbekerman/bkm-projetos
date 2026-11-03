@@ -29,13 +29,15 @@ export function createCloudStore(client) {
     async projects() { return rows(client.from('projects').select('*').order('created_at', {ascending:false})); },
     async members() { return rows(client.from('project_members').select('project_id,user_id,role')); },
     async projectData(projectId) {
-      const [folders,documents,revisions,reviews] = await Promise.all([
+      const [folders,documents,revisions,reviews,tasks,people] = await Promise.all([
         rows(client.from('folders').select('*').eq('project_id', projectId).order('name')),
         rows(client.from('documents').select('*').eq('project_id', projectId).order('title')),
         rows(client.from('document_revisions').select('*').eq('project_id', projectId).order('created_at',{ascending:false})),
-        rows(client.from('revision_reviews').select('*').eq('project_id', projectId).order('created_at',{ascending:false}))
+        rows(client.from('revision_reviews').select('*').eq('project_id', projectId).order('created_at',{ascending:false})),
+        rows(client.from('project_tasks').select('*').eq('project_id',projectId).order('created_at',{ascending:false})),
+        rows(client.rpc('project_people',{p_project_id:projectId}))
       ]);
-      return {folders,documents,revisions,reviews};
+      return {folders,documents,revisions,reviews,tasks,people};
     },
     async saveProject(values,id) {
       if (id) return checked(await client.from('projects').update(values).eq('id',id).select().single());
@@ -80,6 +82,9 @@ export function createCloudStore(client) {
       }
       return checked(await client.from('document_revisions').update({upload_state:'ready'}).eq('id',revision.id).eq('upload_state','pending').select().single());
     },
+    async saveTask(values,id){return checked(await (id?client.from('project_tasks').update(values).eq('id',id):client.from('project_tasks').insert(values)).select().single());},
+    async taskComments(taskId){return rows(client.from('task_comments').select('*').eq('task_id',taskId).order('created_at'));},
+    async addTaskComment(values){return checked(await client.from('task_comments').insert(values).select().single());},
     async requestReview(revisionId,message) {return checked(await client.rpc('request_revision_review',{p_revision_id:revisionId,p_message:message}));},
     async decideReview(reviewId,outcome,message) {return checked(await client.rpc('decide_revision_review',{p_review_id:reviewId,p_outcome:outcome,p_message:message}));},
     async annotations(revisionId) {return rows(client.from('document_annotations').select('*').eq('revision_id',revisionId).is('deleted_at',null).order('created_at'));},
