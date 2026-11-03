@@ -11,7 +11,15 @@ insert into auth.users(id) values
  (current_setting('bkm.test_reader')::uuid),(current_setting('bkm.test_outsider')::uuid);
 set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('bkm.test_owner'),true);
-insert into public.projects(id,code,name) values(current_setting('bkm.test_project')::uuid,'INTEGRATION-TEST','Projeto temporário');
+-- Match the application's INSERT + SELECT/RETURNING, rather than INSERT alone.
+insert into public.projects(id,code,name) values(current_setting('bkm.test_project')::uuid,'INTEGRATION-TEST','Projeto temporário') returning id,owner_id;
+do $$ declare ignored uuid; begin
+ begin
+  insert into public.projects(owner_id,code,name) values(current_setting('bkm.test_outsider')::uuid,'SPOOFED-OWNER','Forbidden') returning id into ignored;
+  raise exception 'TEST FAILED: forged ownership accepted';
+ exception when insufficient_privilege then null;
+ end;
+end; $$;
 insert into public.project_members(project_id,user_id,role) values
  (current_setting('bkm.test_project')::uuid,current_setting('bkm.test_editor')::uuid,'editor'),
  (current_setting('bkm.test_project')::uuid,current_setting('bkm.test_reader')::uuid,'reader');

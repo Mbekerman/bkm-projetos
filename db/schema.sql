@@ -152,7 +152,7 @@ grant select,insert,update,delete on public.project_members to authenticated;
 grant select,insert on public.document_revisions to authenticated;
 grant select on public.audit_events to authenticated;
 
-create policy projects_read on public.projects for select to authenticated using(bkm_private.can_access_project(id));
+create policy projects_read on public.projects for select to authenticated using(owner_id=(select auth.uid()) or bkm_private.can_access_project(id));
 create policy projects_create on public.projects for insert to authenticated with check(owner_id=(select auth.uid()));
 create policy projects_edit on public.projects for update to authenticated using(bkm_private.owns_project(id)) with check(owner_id=(select auth.uid()));
 create policy members_read on public.project_members for select to authenticated using(bkm_private.can_access_project(project_id));

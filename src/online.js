@@ -56,7 +56,7 @@ async function run(work,{close=true}={}){
  if(state.busy)return;state.busy=true;state.error='';
  document.querySelectorAll('button').forEach(b=>b.disabled=true);
  const message=modal.open?document.getElementById('cloud-modal-body').querySelector('.form-error'):null;
- if(message){message.hidden=false;message.className='cloud-progress';message.textContent='Processando. Aguarde a confirmação antes de fechar.';}
+ if(message){message.hidden=false;message.className='form-error cloud-progress';message.textContent='Processando. Aguarde a confirmação antes de fechar.';}
  try{await work();if(close)modal.close();}
  catch(error){const text=error.message||'Falha na operação. Tente novamente.';if(modal.open){let p=document.getElementById('cloud-modal-body').querySelector('.form-error');if(!p){p=document.createElement('p');document.getElementById('cloud-modal-body').append(p)}p.hidden=false;p.className='form-error';p.setAttribute('role','alert');p.textContent=text;}else state.error=text;}
  finally{state.busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);render();}
